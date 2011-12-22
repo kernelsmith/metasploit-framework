@@ -506,51 +506,59 @@ protected
 	##
 	# Native Meterpreter-specific windows service manipulation methods
 	##
-	# TODO:  Convert this to use railgun
-	def meterpreter_service_list_new (state=0x03)
+	def meterpreter_service_list_new (state=0x03, type=0x10)
 		# other choices for state: 
 		# "SERVICE_STATE_ALL" = 0x03
 		# "SERVICE_STATE_ACTIVE" = 0x01
 		# "SERVICE_STATE_INACTIVE" = 0x02
 		#TODO:  Railgun doesn't seem to know the above constants
+		# other choices for type:
+		# Driver = 0x0B, file system driver = 0x02, kernel driver = 0x01
+		# service_win32 = 0x30, service_win32_own_process = 0x10, service_win32_share_process = 0x20
 		
 		# use railgun to make the service query
 		rg = session.railgun
 		# define the function if not defined
-		if not rg.advapi32.functions['EnumServicesStatusA']
+		if not rg.advapi32.functions['EnumServicesStatusExA']
 			# MSDN
 			#BOOL WINAPI EnumServicesStatus(
 			#	__in 		 SC_HANDLE hSCManager,
+			#	__in         SC_ENUM_TYPE InfoLevel,
 			#	__in         DWORD dwServiceType,
 			#	__in         DWORD dwServiceState,
 			#	__out_opt    LPENUM_SERVICE_STATUS lpServices,
 			#	__in         DWORD cbBufSize,
 			#	__out        LPDWORD pcbBytesNeeded,
 			#	__out        LPDWORD lpServicesReturned,
-			#	__inout_opt  LPDWORD lpResumeHandle
+			#	__inout_opt  LPDWORD lpResumeHandle,
+			#	__in_opt     LPCTSTR pszGroupName
 			#);
-			rg.add_function('advapi32', 'EnumServicesStatusA', 'BOOL',[
+			rg.add_function('advapi32', 'EnumServicesStatusExA', 'BOOL',[
 				['DWORD','hSCManager',		'in'],
+				['DWORD','InfoLevel',		'in'], # 0
 				['DWORD','dwServiceType',	'in'], #SERVICE_WIN32
 				['DWORD','dwServiceState',	'in'], #1, 2, or 3
-				['PBLOB','lpServices',		'out'],
+				['PBLOB','lpServices',		'out'], 
 				['DWORD','cbBufSize',		'in'],
 				['PDWORD','pcBytesNeeded',	'out'],
 				['PDWORD','lpServicesReturned','out'], # the number of svs returned
-				['PDWORD','lpResumeHandle','inout'] # 0
+				['PDWORD','lpResumeHandle','inout'], # 0
+				['PCHAR','pszGroupName', 'in'], # use nil, not "" unless you know what u doin (msdn)
 			])
 		end
 		#print_debug rg.advapi32.functions.to_s
 		# run the railgun query
 		begin
-			nil_handle,scum_handle = get_serv_handle(0,"SERVICE_QUERY_STATUS")
+			# "SERVICE_QUERY_STATUS"
+			nil_handle,scum_handle = get_serv_handle(
+				0,"SC_MANAGER_ENUMERATE_SERVICE | SC_MANAGER_CONNECT")
 			# ok, let's use the winapi to figure out just how big our buffer needs to be
 			# note, there could be a "race" condition where the buffer size increases after we query
 			# but this is about as good as we can do
-			print_debug "Running EnumServicesStatus to get buf_size"
+			print_debug "Running EnumServicesStatusExA to get buf_size"
 			# TODO:  Railgun doesn't know:  SERVICE_WIN32 = 0x30
 			# check if it knows SERVICE_WIN32_OWN_PROCESS = 0x10
-			railhash = rg.advapi32.EnumServicesStatusA(scum_handle,0x10,state,4,0,4,4,4)
+			railhash = rg.advapi32.EnumServicesStatusExA(scum_handle,0,type,state,4,0,4,4,4,nil)
 			# passing in a buf size of 0 gives us the required buf size in pcBytesNeeded
 			if not railhash["GetLastError"] == 0 #change this to if == 0xEA going forward
 				#then this is good, this puts buf size in pcBytesNeeded
@@ -561,8 +569,9 @@ protected
 			end
 			# now use that buf_size to make the real query
 			# TODO:  railgun doesn't seem to know "SERVICE_WIN32" which is 0x30
-			print_debug "Running EnumServicesStatus with buf_size of #{buf_size}"
-			railhash = rg.advapi32.EnumServicesStatusA(scum_handle,0x10,state,buf_size,buf_size,4,4,4)
+			print_debug "Running EnumServicesStatusExA with buf_size of #{buf_size}"
+			railhash = rg.advapi32.EnumServicesStatusExA(
+				scum_handle,0,type,state,buf_size,buf_size,4,4,4,nil)
 			# assume for now that each process_struct is buf_size / lpServicesReturned or ?36(37)B
 			# for now, let's just see this buffer boyyyyyy
 			if railhash["GetLastError"] == 0
@@ -910,7 +919,7 @@ protected
 	# with decimal windows constants.  hex_string normally comes from a PBLOB lpBuffer (Railgun)
 	#
 	def parse_service_status_process_structure(hex_string)
-		#print_debug "parsing #{hex_string.inspect}"
+		print_debug "parsing #{hex_string.inspect}"
 		names = CURRENT_SERVICE_STATUS_PROCESS_STRUCT_NAMES
 		arr_of_arrs = names.zip(hex_string.unpack("V8"))
 		hashish = Hash[*arr_of_arrs.flatten]

@@ -42,9 +42,14 @@ class Metasploit3 < Msf::Post
 		begin
 		
 		print_status()
+		print_status("TESTING service_query_status on servicename: #{datastore["QSERVICE"]}")
+		results = service_query_status(datastore['QSERVICE'])
+		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
+		
+		print_status()
 		print_status("TESTING service_list")
 		results = service_list
-		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
+		print_status("RESULTS: #{results.class} #{results.unpack('@7V8')} #{results.pretty_inspect}")
 		return
 		
 		blab = datastore['VERBOSE']
@@ -57,11 +62,6 @@ class Metasploit3 < Msf::Post
 		
 		print_status "TESTING service_running?(#{datastore['QSERVICE']})"
 		results = service_running?(datastore['QSERVICE'])
-		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
-		
-		print_status()
-		print_status("TESTING service_query_status on servicename: #{datastore["QSERVICE"]}")
-		results = service_query_status(datastore['QSERVICE'])
 		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
 
 		print_status()
