@@ -138,9 +138,9 @@
 		run_single("use $mod") if mod # if mod specified, switch to it first
 		# keep in mind you'll have to make sure your datastore for that mod is correct already
 
-		framework.sessions.count.each do |session|
-			run_single("set SESSION #{session.first}")
-			print_status("Running #{active_module.fullname} against session #{session.first}")
+		framework.sessions.each_key do |session|
+			run_single("set SESSION #{session}")
+			print_status("Running #{active_module.fullname} against session #{session}")
 			run_single("run")
 			select(nil, nil, nil, 1) # sleep 1
 		end
