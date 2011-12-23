@@ -1,9 +1,3 @@
-module Msf
-module Ui
-module Console
-module Resource
-module Helpers
-
 # include this file to gain a buch of methods helpful to writing more elaborate resource files
 # like when using a resource file for a demo or automation etc
 # $Author: kernelsmith
@@ -13,8 +7,7 @@ module Helpers
 	#  Assuming this file is located at <install_dir>/scripts/resource/helpers/demo_methods.rb
 	#resource_dir = File.join(Msf::Config.install_root, "scripts", "resource")
 	#require File.join(resource_dir, "helpers","demo_methods")
-	#  You can also include it:  include Msf::Ui::Console::Resource::Helpers if you'd like
-	#  and this is a good spot to run stuff like auto_lhost and auto_handler etc
+	#  and this is a good spot to run stuff like rc_auto_lhost and rc_auto_handler etc
 #</ruby>
 
 	#`'~.~'^\_/^*-..-*`'~.~'^\_/^*-..-*`'~.~'^\_/^*-..-*`'~.~'^\_/^*-.
@@ -22,12 +15,12 @@ module Helpers
 	# Helper methods for demo'ing and general resource visual coolness >
 	#                                                                 /
 	#_.~*~._/^\_,-''-._.~*~._/^\_,-''-._.~*~._/^\_,-''-._.~*~._/^\_,-'
-	
+
 	#
 	# Method for simple pause, press enter to continue, optional timeout +tout+
 	# optional +verbose+ for slightly more status information output
 	#
-	def pause(tout = 0, verbose = true)
+	def rc_pause(tout = 0, verbose = true)
 		require 'timeout'
 		print_good('PAUSED - enter to continue') if verbose
 		#gets
@@ -38,7 +31,7 @@ module Helpers
 		end
 		print_good('Continuing...') if verbose
 	end
-	
+
 	#
 	# this method helps you perform a clear screen, as a part of and during a resource script run,
 	# esp when other methods of doing so fail
@@ -51,15 +44,15 @@ module Helpers
 	# pass the string returned by that command to this method
 	# If you're running msf in Cygwin, on Windows, make sure to run the irb command in Cygwin (untested)
 	# If you are running MSF in Windows, run %x{cls} in irb and pass that string
-	
-	def clear(rc_clear_string = "\e[H\e[2J")
+
+	def rc_clear(rc_clear_string = "\e[H\e[2J")
 		$stdout.print rc_clear_string
 	end
-	
+
 	#
 	# Method to let us do variable timing delays
 	#
-	def var_delay(dmin=20,dmax=300)
+	def rc_var_delay(dmin=20,dmax=300)
 		wtime = rand(dmax-dmin) + dmin
 		print_good "Delaying for #{wtime} seconds"
 		while wtime > 0
@@ -70,11 +63,11 @@ module Helpers
 		print_line
 		print_good "Continuing..."
 	end
-	
+
 	#
 	# Method for a simple delay
 	#
-	def delay(wtime=5,verbose=true)
+	def rc_delay(wtime=5,verbose=true)
 		print_good "Delaying for #{wtime} seconds" if verbose
 		while wtime > 0
 			printf("\r%d",wtime) if verbose
@@ -84,19 +77,19 @@ module Helpers
 		print_line
 		print_good "Continuing..." if verbose
 	end
-	
+
 	#`'~.~'^\_/^*-..-*`'~.~'^\_/^*-..-*`'~.~'^\_/^*-..-*`'~.~'^\_/^*-.
 	#                                                                 \
 	# Helper methods for running modules more easily & automatically   >
 	#                                                                 /
 	#_.~*~._/^\_,-''-._.~*~._/^\_,-''-._.~*~._/^\_,-''-._.~*~._/^\_,-'
-	
+
 	#
 	# this method helps automatically set LHOST
 	#
-	
-	# NOTE, if you don't want LHOST to be your "default route" interface, you should call this
-	#       with target net changed to something in the network attached to the interface you do want
+
+	# NOTE: if you don't want LHOST to be your "default route" interface, you should call this
+	#     with target net changed to something in the network attached to the interface you do want
 
 	# target_net is important if you have multiple interfaces and you want a specific one.
 	# The interface LHOST will be set to is chosen by what interface is used to route to target_net
@@ -106,8 +99,8 @@ module Helpers
 	# if you are using virtual interfaces etc, you might want target_net to be one of your vmnets
 	# like if your "host-only" network is 192.168.170.1/24 you could: rc_auto_lhost("192.168.170.1")
 	# and no matter what your ip actually is on that network, this will figure it out
-	
-	def auto_lhost(target_network="5.5.5.5")
+
+	def rc_auto_lhost(target_network="5.5.5.5")
 		# in case someone accidentally passes in a cidr range:
 		target_network = target_network.split('/').first if target_network =~ /\//
 		# in case someone passes in a network range, which most likely won't work well but...
@@ -126,30 +119,16 @@ module Helpers
 		run_single("set LHOST #{my_interface}")
 		#run_single("setg LHOST #{my_interface}") #optional
 	end
-	
+
 	#
 	# this method just sets up a persistent multi/handler, for reverse connections on +lport+
 	# using the payload specified by +payload+
 	# defaults are 4444 and "windows/meterpreter/reverse_tcp" respectively
 	#
-	def auto_handler(lport=4444, payload="windows/meterpreter/reverse_tcp")
+	def rc_auto_handler(lport=4444, payload="windows/meterpreter/reverse_tcp")
 		run_single("use multi/handler")
 		run_single("set PAYLOAD #{payload}")
 		run_single("set LPORT #{lport}")
 		run_single("set ExitOnSession false")
 		run_single("exploit -j -z")
 	end
-end # Helper
-end # Resource
-end # Console
-end # Ui
-end # Msf
-
-
-
-
-
-
-
-
-
