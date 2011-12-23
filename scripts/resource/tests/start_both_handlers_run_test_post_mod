@@ -2,8 +2,7 @@
 
 # let's get our vms started first
 load lab
-lab_load_config test_lab.yml
-# and start them
+lab_load test_lab.yml
 lab_start winxp_sp2
 
 <ruby>
