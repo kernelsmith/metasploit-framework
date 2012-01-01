@@ -1,4 +1,5 @@
 require 'msf/core/post/windows/registry'  # TODO:  Remove this dependency
+require 'rex/post/meterpreter/extensions/stdapi/railgun/util.rb'
 
 module Msf
 class Post
@@ -7,7 +8,7 @@ module Windows
 module WindowsServices
 
 	# these symbols are used for hash keys and are scoped here to allow a consistent api
-	CURRENT_SERVICE_STATUS_PROCESS_STRUCT_NAMES = [:type,:state,:controls,:win32_exit_code,
+	SERVICE_PROCESS_STRUCT_NAMES = [:type,:state,:controls,:win32_exit_code,
 	:service_exit_code,:checkpoint,:wait_hint,:pid,:flags]
 
 	include Msf::Post::Windows::CliParse
@@ -506,6 +507,11 @@ protected
 	##
 	# Native Meterpreter-specific windows service manipulation methods
 	##
+	
+	#
+	# Return an array of hashes corresponding to the list of services of +state+ and +type+
+	#  Hashes have SERVICE_PROCESS_STRUCT_NAMES as keys
+	#
 	def meterpreter_service_list_new (state=0x03, type=0x10)
 		# other choices for state: 
 		# "SERVICE_STATE_ALL" = 0x03
@@ -572,13 +578,13 @@ protected
 			print_debug "Running EnumServicesStatusExA with buf_size of #{buf_size}"
 			railhash = rg.advapi32.EnumServicesStatusExA(
 				scum_handle,0,type,state,buf_size,buf_size,4,4,4,nil)
-			# assume for now that each process_struct is buf_size / lpServicesReturned or ?36(37)B
-			# for now, let's just see this buffer boyyyyyy
+			# for now, let's just see this buffer boyyyyyy, try to parse it but...
 			if railhash["GetLastError"] == 0
 				#print_debug "Buffer:  " + railhash["lpServices"].inspect
-				print_debug "Number of services:  " + railhash["lpServicesReturned"].to_s
-				return railhash["lpServices"].inspect
-				#return parse_service_status_process_structure(railhash["lpBuffer"])
+				num_services_returned = railhash["lpServicesReturned"].to_i
+				print_debug "Number of services:  " + num_services_returned.to_s
+				return parse_enum_service_status_process_structure(
+					railhash["lpServices"], num_services_returned )
 			else # there was an error, let's handle it
 				err = railhash["GetLastError"]
 				handle_railgun_error(err,__method__,"Error querying service status",rg,
@@ -920,11 +926,52 @@ protected
 	#
 	def parse_service_status_process_structure(hex_string)
 		print_debug "parsing #{hex_string.inspect}"
-		names = CURRENT_SERVICE_STATUS_PROCESS_STRUCT_NAMES
+		names = SERVICE_PROCESS_STRUCT_NAMES
 		arr_of_arrs = names.zip(hex_string.unpack("V8"))
 		hashish = Hash[*arr_of_arrs.flatten]
 	end
 	
+	
+	# Array of:
+	# typedef struct _ENUM_SERVICE_STATUS_PROCESS {
+  	# LPTSTR                 lpServiceName; non-const TCHAR str, TCHAR is wide char if unicode defined
+  	# LPTSTR                 lpDisplayName;
+	# SERVICE_STATUS_PROCESS ServiceStatusProcess;
+	# } ENUM_SERVICE_STATUS_PROCESS, *LPENUM_SERVICE_STATUS_PROCESS;
+
+	#
+	# Converts a hex string into an array of hashes representing an
+	# _ENUM_SERVICE_STATUS_PROCESS which is an array of _SERVICE_STATUS_PROCESS 
+	# with decimal windows constants.  hex_string normally comes from a PBLOB lpBuffer (Railgun)
+	#
+	def parse_enum_service_status_process_structure(hex_string, num_items_in_array)
+		print_debug "parsing #{hex_string.inspect} into #{num_items_in_array} services"
+		
+		# first, define the service status process data structure type
+		_SERVICE_STATUS_PROCESS = [
+				[:dwServiceType, :DWORD],
+				[:dwCurrentState, :DWORD],
+				[:dwControlsAccepted, :DWORD],
+				[:dwWin32ExitCode, :DWORD],
+				[:dwServiceSpecificExitCode, :DWORD],
+				[:dwCheckPoint, :DWORD],
+				[:dwWaitHint, :DWORD],
+				[:dwProcessId, :DWORD],
+				[:dwServiceFlags, :DWORD],
+		]
+		# now the enum service status process struct
+		_ENUM_SERVICE_STATUS_PROCESS = [
+				[:lpServiceName, :LPTSTR],
+				[:lpDisplayName, :LPTSTR],
+				[:serviceStatusProcess, _SERVICE_STATUS_PROCESS],
+		]
+		rg = session.railgun
+		client = session.platform
+		utility = Rex::Post::Meterpreter::Extensions::Stdapi::Railgun::Util.new(rg,client)
+		type, length, bufptr, buffer = nil
+		data = utility.read_array(_ENUM_SERVICE_STATUS_PROCESS,num_items_in_array, 0, hex_string)
+	end
+
 	#typedef struct _SERVICE_STATUS_PROCESS {
 	#	DWORD dwServiceType;
 	#	DWORD dwCurrentState;

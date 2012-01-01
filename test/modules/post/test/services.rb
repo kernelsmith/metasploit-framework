@@ -49,7 +49,7 @@ class Metasploit3 < Msf::Post
 		print_status()
 		print_status("TESTING service_list")
 		results = service_list
-		print_status("RESULTS: #{results.class} #{results.unpack('@7V8')} #{results.pretty_inspect}")
+		print_status("RESULTS: #{results.class} \n#{results.pretty_inspect}")
 		return
 		
 		blab = datastore['VERBOSE']
