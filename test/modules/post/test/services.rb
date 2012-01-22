@@ -40,18 +40,7 @@ class Metasploit3 < Msf::Post
 
 	def run
 		begin
-		
-		print_status()
-		print_status("TESTING service_query_status on servicename: #{datastore["QSERVICE"]}")
-		results = service_query_status(datastore['QSERVICE'])
-		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
-		
-		print_status()
-		print_status("TESTING service_list")
-		results = service_list
-		print_status("RESULTS: #{results.class} \n#{results.pretty_inspect}")
-		return
-		
+
 		blab = datastore['VERBOSE']
 		print_status("Running against session #{datastore["SESSION"]}")
 		print_status("Session type is #{session.type}")
@@ -59,21 +48,51 @@ class Metasploit3 < Msf::Post
 		print_status("Don't be surprised to see some errors as the script is faster")
 		print_line("than the windows SCM, just make sure the errors are sane.  You can")
 		print_line("set VERBOSE to true to see more details")
-		
+# The methods to be supported by the new API
+	# List methods:  service_list, service_list_running
+	# Service query methods:  service_running?, service_get_config, service_get_status, 
+	# 	service_get_display_name
+	# Service action methods:  service_change_startup, service_create,service_delete,
+	# 	service_start, service_stop
+	# Deprecated:  service_info
+
+		#  LIST METHODS
+		print_status()
+		print_status("TESTING service_query_status on servicename: #{datastore["QSERVICE"]}")
+		results = service_query_status(datastore['QSERVICE'])
+		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
+
+		print_status()
+		print_status("TESTING service_list")
+		results = service_list
+		print_status("RESULTS: #{results.class} \n#{results.pretty_inspect}")
+
+		#  SERVICE QUERY METHODS
+		print_status()
+		print_status("TESTING service_list_running")
+		results = service_list_running
+		print_status("RESULTS: #{results.class} \n#{results.pretty_inspect}")
+
 		print_status "TESTING service_running?(#{datastore['QSERVICE']})"
 		results = service_running?(datastore['QSERVICE'])
 		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
 
 		print_status()
-		print_status("TESTING service_query_config on servicename: #{datastore["QSERVICE"]}")
-		results = service_query_config(datastore['QSERVICE'])
+		print_status("TESTING service_get_config on servicename: #{datastore["QSERVICE"]}")
+		results = service_get_config(datastore['QSERVICE'])
 		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
 
 		print_status()
-		print_status("TESTING service_info on servicename: #{datastore["QSERVICE"]}")
-		results = service_info(datastore['QSERVICE'])
+		print_status("TESTING service_get_status on servicename: #{datastore["QSERVICE"]}")
+		results = service_get_status(datastore['QSERVICE'])
 		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
 
+		print_status()
+		print_status("TESTING service_get_display_name on servicename: #{datastore["QSERVICE"]}")
+		results = service_get_display_name(datastore['QSERVICE'])
+		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
+
+		#  SERVICE ACTION METHODS
 		print_status()
 		print_status("TESTING service_change_startup on servicename: #{datastore['QSERVICE']} " +
 					"to #{datastore['MODE']}")
@@ -115,20 +134,11 @@ class Metasploit3 < Msf::Post
 		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
 		print_status("Current status of this service " + 
 					"#{service_query_ex(datastore['QSERVICE']).pretty_inspect}") if blab
-		print_status()
-		print_status("TESTING service_list")
-		results = service_list
-		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
-		print_status("Sleeping to let the registry & threads settle")
-		select(nil, nil, nil, 3)
-
-		print_status "TESTING service_running?(#{datastore['QSERVICE']})"
-		results = service_running?(datastore['QSERVICE'])
-		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
 		
+		#  DEPRECATED METHODS
 		print_status()
-		print_status("TESTING service_list_running")
-		results = service_list_running
+		print_status("TESTING service_info on servicename: #{datastore["QSERVICE"]}")
+		results = service_info(datastore['QSERVICE'])
 		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
 		print_status()
 		print_status("Testing complete.")

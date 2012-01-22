@@ -8,12 +8,35 @@ module Windows
 module WindowsServices
 
 	# these symbols are used for hash keys and are scoped here to allow a consistent api
-	SERVICE_PROCESS_STRUCT_NAMES = [:type,:state,:controls,:win32_exit_code,
-	:service_exit_code,:checkpoint,:wait_hint,:pid,:flags]
+	SERVICE_PROCESS_STRUCT_NAMES = [:type,:state,:controls,:win32_exit_code,:service_exit_code,
+		:checkpoint,:wait_hint,:pid,:flags]
+	SERVICE_CONFIG_STRUCT_NAMES = [:service_name,:type,:start_type,:error_control,
+		:binary_path_name,:load_order_group,:tag,:display_name,:dependencies,:service_start_name]
 
 	include Msf::Post::Windows::CliParse
-	include ::Msf::Post::Windows::Registry # TODO:  Remove this dependency
 	
+	@prefer_display_names = false
+	def self.prefer_display_names
+		@prefer_display_names
+	end
+	def self.prefer_display_names=(boo)
+		@prefer_display_names = boo
+	end
+	
+# The methods supported by the old API:
+	# List methods:  service_list
+	# Service action methods:  service_change_startup,service_create,service_start,service_stop,
+	# 	service_delete
+	# Service query methods:  service_info
+
+# The methods to be supported by the new API
+	# List methods:  service_list, service_list_running
+	# Service query methods:  service_running?, service_get_config, service_get_status, 
+	# 	service_get_display_name
+	# Service action methods:  service_change_startup, service_create,service_delete,
+	# 	service_start, service_stop
+	# Deprecated:  service_info
+
 	#
 	# List all Windows Services present. Returns an Array containing the names (keynames)
 	# of the services, whether they are running or not.
@@ -21,8 +44,7 @@ module WindowsServices
 
 	def service_list
 		if session_has_services_depend?
-			#TODO:  remove _new when done
-			meterpreter_service_list_new
+			meterpreter_service_list
 		else
 			shell_service_list
 		end
@@ -51,23 +73,7 @@ module WindowsServices
 			shell_service_running?(service_name)
 		end
 	end
-
-	#
-	# Get Windows Service information. 
-	#
-	# Information returned in a hash with display name, startup mode and
-	# command executed by the service. Service name is case sensitive.  Hash
-	# keys are Name, Start, Command and Credentials.
-	# TODO:  Deprecate this in favor os service_query_config and service_query_ex
-
-	def service_info(name,extended_info=false)
-		if session_has_services_depend?
-			meterpreter_service_info(name)
-		else
-			shell_service_info(name, extended_info)
-		end
-	end
-
+	
 	#
 	# Changes a given service startup mode, name must be provided, mode defaults to auto.
 	#
@@ -147,78 +153,84 @@ module WindowsServices
 	#
 	# Get Windows Service config information. 
 	#
-	# Info returned stuffed into a hash with most service info available 
+	# Info returned stuffed into a hash with most service config info available 
 	# Service name is case sensitive.
 	#
-	# for non-native meterpreter:
 	# Hash keys match the keys returned by sc.exe qc <service_name>, but downcased and symbolized
+	# captured as SERVICE_CONFIG_STRUCT_NAMES
 	# e.g returns {
 	# :service_name => "winmgmt",
-	# :type => "20 WIN32_SHARE_PROCESS",
-	# :start_type => "2 AUTO_START",
+	# :type 		=> "20 WIN32_SHARE_PROCESS",
+	# :start_type 	=> "2 AUTO_START",
 	# <...>
 	# :dependencies => "RPCSS,OTHER",
 	# :service_start_name => "LocalSystem" }
 	#
-	
-	def service_query_config(service_name)
+	def service_get_config(service_name)
 		if session_has_services_depend?
-			#TODO:  implement this, check if shell needs a status vs config
+			#TODO:  implement this
 			return "not implemented yet"
-			meterpreter_service_query_config(service_name)
+			meterpreter_service_get_config(service_name)
 		else
-			shell_service_query_config(service_name)
+			shell_service_get_config(service_name)
 		end
 	end
 
 	#
-	# Get Windows Service status information. 
+	# Get Windows Service extended status information. 
 	#
-	# Info returned stuffed into a hash with most service info available 
+	# Info returned stuffed into a hash with most service status info available 
 	# Service name is case sensitive.
 	#
-	# for non-native meterpreter:
 	# Hash keys match the keys returned by sc.exe qc <service_name>, but downcased and symbolized
+	# captured as SERVICE_PROCESS_STRUCT_NAMES
 	# e.g returns {
 	# :service_name => "winmgmt",
-	# :type => "20 WIN32_SHARE_PROCESS",
-	# :start_type => "2 AUTO_START",
+	# :type 		=> "20 WIN32_SHARE_PROCESS",
+	# :state		=> "4 RUNNING, STOPPABLE,NOT_PAUSABLE"
 	# <...>
-	# :dependencies => "RPCSS,OTHER",
-	# :service_start_name => "LocalSystem" }
-	#
+    # :pid			=>	1084,
+    # :flags		=>	nil }
 	
-	def service_query_status(service_name)
+	def service_get_status(service_name)
 		if session_has_services_depend?
-			meterpreter_service_query_status(service_name)
+			meterpreter_service_get_status(service_name)
+			# TODO:  meterp version needs to parse and return full state like "4 RUNNING,STOPPABLE"
 		else
-			#TODO:  implement this, check if shell needs a status vs config
-			return "not implemented yet"
-			shell_service_query_status(service_name)
+			shell_service_get_status(service_name)
 		end
 	end
-
-	#
-	# Get Windows Service state only. 
-	#
-	# returns a string with state info such as "4 RUNNING,STOPPABLE,PAUSABLE,ACCEPTS_SHUTDOWN"
-	# could normalize it to just "RUNNING" if desired, but not currently
-	# NOTE:  Currently the meterpreter version will only return primary state, like "4 RUNNING"
-
-	def service_query_state(service_name)
+	
+	def service_get_display_name(service_name)
 		if session_has_services_depend?
-			meterpreter_service_query_state(service_name)
+			meterpreter_service_get_display_name(service_name)
 		else
-			shell_service_query_state(service_name)
-		end	
+			shell_service_get_display_name(service_name)
+		end
 	end
+	
+	#
+	# Get Windows Service information. (To be deprecated)
+	#
+	# Information returned in a hash with display name, startup mode and
+	# command executed by the service. Service name is case sensitive.  Hash
+	# keys are Name, Start, Command and Credentials.
+	# TODO:  Deprecate this in favor os service_get_config and service_query_ex
 
+	def service_info(name,extended_info=false)
+		if session_has_services_depend?
+			meterpreter_service_info(name)
+		else
+			shell_service_info(name, extended_info)
+		end
+	end
+	
 protected
 
 	##
 	# Non-native Meterpreter windows service manipulation methods, i.e. shell or java meterp etc
 	##
-	def shell_service_list
+	def shell_service_list()
 		services = []
 		begin
 			cmd = "cmd.exe /c sc query type= service state= all"
@@ -227,7 +239,11 @@ protected
 				results.each_line do |line| 
 					if line =~ /SERVICE_NAME:/
 						h = win_parse_results(line)
-						services << h[:service_name]
+						if prefer_display_names
+							services << h[:display_name]
+						else
+							services << h[:service_name]
+						end
 					end 
 				end
 			elsif results =~ /(^Error:.*|FAILED.*:)/
@@ -246,7 +262,7 @@ protected
 		return services
 	end
 
-	def shell_service_list_running
+	def shell_service_list_running()
 		#SERVICE_NAME: Winmgmt
 		#DISPLAY_NAME: Windows Management Instrumentation
       	# <...etc...>
@@ -259,7 +275,11 @@ protected
 				results.each_line do |line| 
 					if line =~ /SERVICE_NAME:/
 						h = win_parse_results(line)
-						services << h[:service_name]
+						if prefer_display_names
+							services << h[:display_name]
+						else
+							services << h[:service_name]
+						end
 					end 
 				end
 			elsif results =~ /(^Error:.*|FAILED.*:)/
@@ -279,14 +299,16 @@ protected
 	end
 
 	def shell_service_running?(service_name)
+		# TODO:  Accomodate if prefer_display_names ??
 		running_services = shell_service_list_running
 		return true if running_services.include?(service_name)
 	end
 	
-	def shell_service_query_config(name)
+	def shell_service_get_config(service_name)
+		# TODO:  Accomodate if prefer_display_names ??
 		service = {}
 		begin
-			cmd = "cmd.exe /c sc qc #{name.chomp}"
+			cmd = "cmd.exe /c sc qc #{service_name.chomp}"
 			results = session.shell_command_token_win32(cmd)
 			if results =~ /SUCCESS/
 				#[SC] QueryServiceConfig SUCCESS
@@ -319,31 +341,8 @@ protected
 		return service
 	end
 	
-	def shell_service_info(name,extended_info=false)
-		# TODO:  Deprecate this for query_config and query_ex
-		service = {}
-		begin
-			h = shell_service_query_config(name)
-			return nil unless h
-			if ! extended_info
-				# this is here only for backwards compatibility with the original meterp version
-				service['Name'] = h[:service_name]
-				service['Startup'] = normalize_mode(h[:start_type])
-				service['Command'] = h[:binary_path_name]
-				service['Credentials'] = h[:service_start_name]
-				return service
-			else
-				# this is alot more useful stuff, but not backward compatible
-				return h
-			end
-		rescue Exception => e
-			print_error(e.to_s)
-			return nil
-		end
-		return nil
-	end
-
-	def shell_service_query_ex(name)
+	def shell_service_get_status(service_name)
+		# TODO:  Accomodate if prefer_display_names ??
 		service = {}
 		begin
 			cmd = "cmd.exe /c sc queryex #{name.chomp}"
@@ -376,18 +375,9 @@ protected
 		end
 		return service
 	end
-	
-	def shell_service_query_state(name)
-		begin
-			h = service_query_ex(name)
-			return h[:state] if h # return the state
-		rescue Exception => e
-			print_error(e.to_s)
-		end
-		return nil
-	end
 
 	def shell_service_change_startup(name,mode)
+		# TODO:  Accomodate if prefer_display_names ??
 		begin
 			mode = normalize_mode(mode)
 			cmd = "cmd.exe /c sc config #{name} start= #{mode}"
@@ -437,6 +427,7 @@ protected
 	end
 
 	def shell_service_start(name)
+		# TODO:  Accomodate if prefer_display_names ??
 		begin
 			cmd = "cmd.exe /c sc start #{name}"
 			results = session.shell_command_token_win32(cmd)
@@ -459,6 +450,7 @@ protected
 	end
 
 	def shell_service_stop(name)
+		# TODO:  Accomodate if prefer_display_names ??
 		begin
 			cmd = "cmd.exe /c sc stop #{name}"
 			results = session.shell_command_token_win32(cmd)
@@ -480,9 +472,10 @@ protected
 		end
 	end
 
-	def shell_service_delete(name)
+	def shell_service_delete(service_name)
+		# TODO:  Accomodate if prefer_display_names ??
 		begin
-			cmd = "cmd.exe /c sc delete #{name}"
+			cmd = "cmd.exe /c sc delete #{service_name}"
 			results = session.shell_command_token_win32(cmd)
 			if results =~ /SUCCESS/
 				return nil
@@ -503,173 +496,96 @@ protected
 		end
 	end
 	
-
-	##
-	# Native Meterpreter-specific windows service manipulation methods
-	##
-	
-	#
-	# Return an array of hashes corresponding to the list of services of +state+ and +type+
-	#  Hashes have SERVICE_PROCESS_STRUCT_NAMES as keys
-	#
-	def meterpreter_service_list_new (state=0x03, type=0x10)
-		# other choices for state: 
-		# "SERVICE_STATE_ALL" = 0x03
-		# "SERVICE_STATE_ACTIVE" = 0x01
-		# "SERVICE_STATE_INACTIVE" = 0x02
-		#TODO:  Railgun doesn't seem to know the above constants
-		# other choices for type:
-		# Driver = 0x0B, file system driver = 0x02, kernel driver = 0x01
-		# service_win32 = 0x30, service_win32_own_process = 0x10, service_win32_share_process = 0x20
-		
-		# use railgun to make the service query
-		rg = session.railgun
-		# define the function if not defined
-		if not rg.advapi32.functions['EnumServicesStatusExA']
-			# MSDN
-			#BOOL WINAPI EnumServicesStatus(
-			#	__in 		 SC_HANDLE hSCManager,
-			#	__in         SC_ENUM_TYPE InfoLevel,
-			#	__in         DWORD dwServiceType,
-			#	__in         DWORD dwServiceState,
-			#	__out_opt    LPENUM_SERVICE_STATUS lpServices,
-			#	__in         DWORD cbBufSize,
-			#	__out        LPDWORD pcbBytesNeeded,
-			#	__out        LPDWORD lpServicesReturned,
-			#	__inout_opt  LPDWORD lpResumeHandle,
-			#	__in_opt     LPCTSTR pszGroupName
-			#);
-			rg.add_function('advapi32', 'EnumServicesStatusExA', 'BOOL',[
-				['DWORD','hSCManager',		'in'],
-				['DWORD','InfoLevel',		'in'], # 0
-				['DWORD','dwServiceType',	'in'], #SERVICE_WIN32
-				['DWORD','dwServiceState',	'in'], #1, 2, or 3
-				['PBLOB','lpServices',		'out'], 
-				['DWORD','cbBufSize',		'in'],
-				['PDWORD','pcBytesNeeded',	'out'],
-				['PDWORD','lpServicesReturned','out'], # the number of svs returned
-				['PDWORD','lpResumeHandle','inout'], # 0
-				['PCHAR','pszGroupName', 'in'], # use nil, not "" unless you know what u doin (msdn)
-			])
-		end
-		#print_debug rg.advapi32.functions.to_s
-		# run the railgun query
+	def shell_service_get_display_name(service_name)
 		begin
-			# "SERVICE_QUERY_STATUS"
-			nil_handle,scum_handle = get_serv_handle(
-				0,"SC_MANAGER_ENUMERATE_SERVICE | SC_MANAGER_CONNECT")
-			# ok, let's use the winapi to figure out just how big our buffer needs to be
-			# note, there could be a "race" condition where the buffer size increases after we query
-			# but this is about as good as we can do
-			print_debug "Running EnumServicesStatusExA to get buf_size"
-			# TODO:  Railgun doesn't know:  SERVICE_WIN32 = 0x30
-			# check if it knows SERVICE_WIN32_OWN_PROCESS = 0x10
-			railhash = rg.advapi32.EnumServicesStatusExA(scum_handle,0,type,state,4,0,4,4,4,nil)
-			# passing in a buf size of 0 gives us the required buf size in pcBytesNeeded
-			if not railhash["GetLastError"] == 0 #change this to if == 0xEA going forward
-				#then this is good, this puts buf size in pcBytesNeeded
-				buf_size = railhash["pcBytesNeeded"].to_i
-				print_debug "Buffer size:  " + buf_size.to_s
-			else # if no error, bad things
-				raise Rex::Post::Meterpreter::RequestError.new(__method__,"Problem getting buffer size")
+			cmd = "cmd.exe /c sc GetDisplayName #{service_name}"
+			results = session.shell_command_token_win32(cmd)
+			if results =~ /SUCCESS/
+				# can't use cliparse's win_parse_results here as MS failed to keep consistent output
+				# output looks like:  [SC] GetServiceDisplayName SUCCESS  Name = Windows Time
+				return results.split(/= +/).last
+			elsif results =~ /(^Error:.*|FAILED.*:)/
+				eh = win_parse_error(results)
+				raise Msf::Post::Windows::CliParse::ParseError.new(__method__,
+				"Error getting display name for #{name}:  #{eh[:error]}",eh[:errval],cmd)
+			elsif results =~ /SYNTAX:/
+				# Syntax error
+				raise Msf::Post::Windows::CliParse::ParseError.new(__method__,
+				"Syntax error",nil,cmd)
+			else
+				raise Msf::Post::Windows::CliParse::ParseError.new(__method__,
+				"Unparsable error:  #{results}",nil,cmd)
 			end
-			# now use that buf_size to make the real query
-			# TODO:  railgun doesn't seem to know "SERVICE_WIN32" which is 0x30
-			print_debug "Running EnumServicesStatusExA with buf_size of #{buf_size}"
-			railhash = rg.advapi32.EnumServicesStatusExA(
-				scum_handle,0,type,state,buf_size,buf_size,4,4,4,nil)
-			# for now, let's just see this buffer boyyyyyy, try to parse it but...
-			if railhash["GetLastError"] == 0
-				#print_debug "Buffer:  " + railhash["lpServices"].inspect
-				num_services_returned = railhash["lpServicesReturned"].to_i
-				print_debug "Number of services:  " + num_services_returned.to_s
-				return parse_enum_service_status_process_structure(
-					railhash["lpServices"], num_services_returned )
-			else # there was an error, let's handle it
-				err = railhash["GetLastError"]
-				handle_railgun_error(err,__method__,"Error querying service status",rg,
-				/^[ERROR_INVALID_|ERROR_ACCESS_|ERROR_INSUFFICIENT_|ERROR_SHUTDOWN_]/)
-				# ^^^^ filter reverse error lookups (helps to look at msdn function return vals)
-			end
-		rescue Rex::Post::Meterpreter::RequestError => e
-			print_error e.to_s
-			return nil
-		ensure
-			rg.advapi32.CloseServiceHandle(scum_handle) if scum_handle
+		rescue Msf::Post::Windows::CliParse::ParseError => e
+			print_error(e.to_s)
 		end
 	end
-	def meterpreter_service_list
-		serviceskey = "HKLM\\SYSTEM\\CurrentControlSet\\Services"
-		threadnum = 0
-		a =[]
-		services = []
+
+	def shell_service_info(name,extended_info=false)
+		# TODO:  Deprecate this for get_config and query_ex
+		# TODO:  If not deprecated, accomodate if prefer_display_names ??
+		service = {}
 		begin
-			meterpreter_registry_enumkeys(serviceskey).each do |s|
- 				if threadnum < 10
-					a.push(::Thread.new(s) { |sk|
-						begin
-							srvtype = registry_getvaldata("#{serviceskey}\\#{sk}","Type").to_s
-							services << sk if srvtype =~ /32|16/
-						rescue
-						end
-					})
-					threadnum += 1
+			h = shell_service_get_config(name)
+			return nil unless h
+			if ! extended_info
+				# this is here only for backwards compatibility with the original meterp version
+				service['Name'] = h[:service_name]
+				service['Startup'] = normalize_mode(h[:start_type])
+				service['Command'] = h[:binary_path_name]
+				service['Credentials'] = h[:service_start_name]
+				return service
+			else
+				# this is alot more useful stuff, but not backward compatible
+				return h
+			end
+		rescue Exception => e
+			print_error(e.to_s)
+			return nil
+		end
+		return nil
+	end
+	
+	##
+#---# Native Meterpreter-specific windows service manipulation methods
+	##
+	def meterpreter_service_list()
+		arr_of_hashes = meterpreter_get_service_hashes(state=0x03, type=0x10)
+		ret_array = []
+		arr_of_hashes.each do |h|
+			if prefer_display_names
+				ret_array << h[:display_name]
+			else
+				ret_array << h[:service_name]
+			end
+		end
+	end
+
+	def meterpreter_service_list_running
+		arr_of_hashes = meterpreter_get_service_hashes (state=0x01, type=0x10)
+		ret_array = []
+		arr_of_hashes.each do |h|
+			if h:[state] =~ /4/
+				if prefer_display_names
+					ret_array << h[:display_name]
 				else
-					sleep(0.05) and a.delete_if {|x| not x.alive?} while not a.empty?
-					threadnum = 0
+					ret_array << h[:service_name]
 				end
 			end
-			#a.join?
-			a.join
-		rescue Exception => e
-			print_error("Error enumerating services.  #{e.to_s}")
 		end
-		return services
+		return ret_array
 	end
 	
 	def meterpreter_service_running?(service_name)
-		state = meterpreter_service_query_state(service_name)
-		return true if state =~ /RUNNING/
+		# TODO:  Accomodate if prefer_display_names ??
+		return true if meterpreter_service_get_status(service_name)[:state] =~ /4/
 		# otherwise
 		return false
 	end
 	
-	def meterpreter_service_query_state(service_name)
-		h = meterpreter_service_query_status(service_name)
-		return nil unless h
-		# format human-like
-		case h[:state]
-		when 5
-			return "5 CONTINUE_PENDING"
-		when 6
-			return "6 PAUSE_PENDING"
-		when 7
-			return "7 PAUSED"
-		when 4
-			return "4 RUNNING"
-		when 2
-			return "2 START_PENDING"
-		when 3
-			return "3 STOP_PENDING"
-		when 1
-			return "1 STOPPED"
-		else
-			return "UNKNOWN"
-		end
-	end
-	
-	def meterpreter_service_list_running
-		all_services = meterpreter_service_list
-		run_services = []
-		all_services.each do |s|
-			run_services << s if meterpreter_service_running?(s)
-		end
-		return run_services
-	end
-
 	# returns hash
-	def meterpreter_service_query_status(service_name)
-		# use railgun to make the service status query
+	def meterpreter_service_get_status(service_name)
+		# must be a service name
 		rg = session.railgun
 		rg.add_dll('advapi32') unless rg.get_dll('advapi32') # load dll if not loaded
 		# define the function if not defined
@@ -692,7 +608,7 @@ protected
 		end
 		# run the railgun query
 		begin
-			serv_handle,scum_handle = get_serv_handle(service_name,"SERVICE_QUERY_STATUS")
+			serv_handle,scum_handle = get_serv_handle(service_name,"SERVICE_get_status")
 			#print_debug "Railgunning queryservicestatusEx"
 			railhash = rg.advapi32.QueryServiceStatusEx(serv_handle,0,37,37,4)
 			#print_debug "Railgun returned:  #{railhash.inspect}"
@@ -711,22 +627,6 @@ protected
 			rg.advapi32.CloseServiceHandle(scum_handle) if scum_handle
 			rg.advapi32.CloseServiceHandle(serv_handle) if serv_handle
 		end
-	end
-		
-	def meterpreter_service_info(service_name)
-		#TODO:  convert this to railgun or just deprecate for query_config or _status
-		service = {}
-		servicekey = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\#{service_name.chomp}"
-		begin
-			service["Name"] = registry_getvaldata(servicekey,"DisplayName").to_s
-			service["Startup"] = normalize_mode(registry_getvaldata(servicekey,"Start").to_i)
-			service["Command"] = registry_getvaldata(servicekey,"ImagePath").to_s
-			service["Credentials"] = registry_getvaldata(servicekey,"ObjectName").to_s
-		rescue Exception => e
-			print_error("Error collecing service info.  #{e.to_s}")
-			return nil
-		end
-		return service
 	end
 
 	def meterpreter_service_change_startup(name,mode)
@@ -837,10 +737,83 @@ protected
 			rg.advapi32.CloseServiceHandle(scum_handle) if scum_handle
 		end
 	end
+	def meterpreter_service_get_config(service_name)
+	# http://msdn.microsoft.com/en-us/library/windows/desktop/ms684932(v=vs.85).aspx
+	#	BOOL WINAPI QueryServiceConfig(
+	#  		__in       SC_HANDLE hService,
+	#  		__out_opt  LPQUERY_SERVICE_CONFIG lpServiceConfig,
+	#  		__in       DWORD cbBufSize,
+	#  		__out      LPDWORD pcbBytesNeeded
+	#	);
+	
+	# http://msdn.microsoft.com/en-us/library/windows/desktop/ms684950(v=vs.85).aspx
+#	typedef struct _QUERY_SERVICE_CONFIG {
+#  		DWORD  dwServiceType;
+#  		DWORD  dwStartType;
+#  		DWORD  dwErrorControl;
+#  		LPTSTR lpBinaryPathName;
+#  		LPTSTR lpLoadOrderGroup;
+#  		DWORD  dwTagId;
+#  		LPTSTR lpDependencies;
+#  		LPTSTR lpServiceStartName;
+#  		LPTSTR lpDisplayName;
+#	} QUERY_SERVICE_CONFIG, *LPQUERY_SERVICE_CONFIG;
+	end
 
-	### Helper methods ###
+	def meterpreter_service_get_display_name(service_name)
+		if ! rg.advapi32.functions['GetServiceDisplayNameA']
+			#	BOOL WINAPI GetServiceDisplayName(
+			#  __in       SC_HANDLE hSCManager,
+			#  __in       LPCTSTR lpServiceName,
+			#  __out_opt  LPTSTR lpDisplayName,
+			#  __inout    LPDWORD lpcchBuffer
+			#);
+			rg.add_function('advapi32', 'GetServiceDisplayNameA', 'BOOL',[
+				['DWORD','hService',		'in'],
+				['LPTSTR','lpServiceName',	'in'],
+				['LPTSTR','lpDisplayName',	'out'],
+				['PDWORD','lpcchBuffer',	'out']
+			])
+		end
+		rg = session.railgun
+		begin
+			# get a scum handle
+			nil_handle,scum_handle = get_serv_handle(0,nil,"GENERIC_READ")
+			railhash = rg.advapi32.GetServiceDisplayNameA(scum_handle,service_name,4,4)
+			if railhash["GetLastError"] == 0
+				return railhash["lpDisplayName"]
+			else # there was an error, let's handle it
+				err = railhash["GetLastError"]
+				handle_railgun_error(err,__method__,"Error getting display name",rg)
+				# ^^^^ filter reverse error lookups (helps to look at msdn function return vals)
+			end
+		rescue Rex::Post::Meterpreter::RequestError => e
+			print_error e.to_s
+		ensure 
+			rg.advapi32.CloseServiceHandle(serv_handle) if serv_handle
+			rg.advapi32.CloseServiceHandle(scum_handle) if scum_handle
+		end
+	end
 
-	#
+	def meterpreter_service_info(service_name)
+		#TODO:  deprecate for get_config
+		h = meterpreter_service_get_config(service_name)
+		begin
+			service["Name"] = h[:display_name] # <-- will fail right now, no display_name
+			service["Startup"] = normalize_mode(registry_getvaldata(servicekey,"Start").to_i)
+			service["Command"] = registry_getvaldata(servicekey,"ImagePath").to_s
+			service["Credentials"] = registry_getvaldata(servicekey,"ObjectName").to_s
+		rescue Exception => e
+			print_error("Error collecing service info.  #{e.to_s}")
+			return nil
+		end
+		return service
+	end
+
+	##
+#---# Helper methods
+	##
+	
 	# Determines whether the session can use meterpreter services methods
 	#
 	def session_has_services_depend?
@@ -919,13 +892,102 @@ protected
 		# we don't use ensure here cuz we don't want the handles to get closed if no error
 		end
 	end
-	
+	#
+	# Return an array of hashes corresponding to the list of services of +state+ and +type+
+	#  Hashes have :service_name, :display_name, and SERVICE_PROCESS_STRUCT_NAMES as keys
+	#
+	def meterpreter_get_service_hashes (state=0x03, type=0x10)
+		# other choices for state: 
+		# "SERVICE_STATE_ALL" = 0x03
+		# "SERVICE_STATE_ACTIVE" = 0x01
+		# "SERVICE_STATE_INACTIVE" = 0x02
+		#TODO:  Railgun doesn't seem to know the above constants
+		# other choices for type:
+		# Driver = 0x0B, file system driver = 0x02, kernel driver = 0x01
+		# service_win32 = 0x30, service_win32_own_process = 0x10, service_win32_share_process = 0x20
+		
+		# use railgun to make the service query
+		rg = session.railgun
+		# define the function if not defined
+		if not rg.advapi32.functions['EnumServicesStatusExA']		
+			# MSDN http://msdn.microsoft.com/en-us/library/windows/desktop/ms682640(v=vs.85).aspx
+			#BOOL WINAPI EnumServicesStatusEx(
+			#	__in 		 SC_HANDLE hSCManager,
+			#	__in         SC_ENUM_TYPE InfoLevel,
+			#	__in         DWORD dwServiceType,
+			#	__in         DWORD dwServiceState,
+			#	__out_opt    LPENUM_SERVICE_STATUS lpServices,
+			#	__in         DWORD cbBufSize,
+			#	__out        LPDWORD pcbBytesNeeded,
+			#	__out        LPDWORD lpServicesReturned,
+			#	__inout_opt  LPDWORD lpResumeHandle, [in, out, optional]
+			#	__in_opt     LPCTSTR pszGroupName [in, optional]
+			#);
+			rg.add_function('advapi32', 'EnumServicesStatusExA', 'BOOL',[
+				['DWORD','hSCManager',		'in'],
+				['DWORD','InfoLevel',		'in'], # 0
+				['DWORD','dwServiceType',	'in'], #SERVICE_WIN32
+				['DWORD','dwServiceState',	'in'], #1, 2, or 3
+				['PBLOB','lpServices',		'out'], 
+				['DWORD','cbBufSize',		'in'],
+				['PDWORD','pcBytesNeeded',	'out'],
+				['PDWORD','lpServicesReturned','out'], # the number of svs returned
+				['PDWORD','lpResumeHandle','inout'], # 0
+				['PCHAR','pszGroupName', 'in'], # use nil, not "" unless you know what u doin (msdn)
+			])
+		end
+		# run the railgun query
+		begin
+			# "SERVICE_get_status"
+			nil_handle,scum_handle = get_serv_handle(
+				0,"SC_MANAGER_ENUMERATE_SERVICE | SC_MANAGER_CONNECT")
+			# ok, let's use the winapi to figure out just how big our buffer needs to be
+			# note, there could be a "race" condition where the buffer size increases after we query
+			# but this is about as good as we can do
+			print_debug "Running EnumServicesStatusExA to get buf_size"
+			# TODO:  Railgun doesn't know:  SERVICE_WIN32 = 0x30
+			# check if it knows SERVICE_WIN32_OWN_PROCESS = 0x10
+			railhash = rg.advapi32.EnumServicesStatusExA(scum_handle,0,type,state,4,0,4,4,4,nil)
+			# passing in a buf size of 0 gives us the required buf size in pcBytesNeeded
+			if not railhash["GetLastError"] == 0 #change this to if == 0xEA going forward
+				#then this is good, this puts buf size in pcBytesNeeded
+				buf_size = railhash["pcBytesNeeded"].to_i
+				print_debug "Buffer size:  " + buf_size.to_s
+			else # if no error, bad things
+				raise Rex::Post::Meterpreter::RequestError.new(__method__,"Problem getting buffer size")
+			end
+			# now use that buf_size to make the real query
+			# TODO:  railgun doesn't seem to know "SERVICE_WIN32" which is 0x30
+			print_debug "Running EnumServicesStatusExA with buf_size of #{buf_size}"
+			railhash = rg.advapi32.EnumServicesStatusExA(
+				scum_handle,0,type,state,buf_size,buf_size,4,4,4,nil)
+			# for now, let's just see this buffer boyyyyyy, try to parse it but...
+			if railhash["GetLastError"] == 0
+				#print_debug "Buffer:  " + railhash["lpServices"].inspect
+				num_services_returned = railhash["lpServicesReturned"].to_i
+				print_debug "Number of services:  " + num_services_returned.to_s
+				parsed_arr = parse_enum_service_status_process_structure(
+					railhash["lpServices"], num_services_returned )
+				return parsed_arr
+			else # there was an error, let's handle it
+				err = railhash["GetLastError"]
+				handle_railgun_error(err,__method__,"Error querying service status",rg,
+				/^[ERROR_INVALID_|ERROR_ACCESS_|ERROR_INSUFFICIENT_|ERROR_SHUTDOWN_]/)
+				# ^^^^ filter reverse error lookups (helps to look at msdn function return vals)
+			end
+		rescue Rex::Post::Meterpreter::RequestError => e
+			print_error e.to_s
+			return nil
+		ensure
+			rg.advapi32.CloseServiceHandle(scum_handle) if scum_handle
+		end
+	end
 	#
 	# Converts a hex string into hash representing a service_status_process_structure
 	# with decimal windows constants.  hex_string normally comes from a PBLOB lpBuffer (Railgun)
 	#
 	def parse_service_status_process_structure(hex_string)
-		print_debug "parsing #{hex_string.inspect}"
+		#print_debug "parsing #{hex_string.inspect}"
 		names = SERVICE_PROCESS_STRUCT_NAMES
 		arr_of_arrs = names.zip(hex_string.unpack("V8"))
 		hashish = Hash[*arr_of_arrs.flatten]
@@ -934,43 +996,10 @@ protected
 	
 	# Array of:
 	# typedef struct _ENUM_SERVICE_STATUS_PROCESS {
-  	# LPTSTR                 lpServiceName; non-const TCHAR str, TCHAR is wide char if unicode defined
-  	# LPTSTR                 lpDisplayName;
+  	# LPTSTR 	lpServiceName; non-const TCHAR str, TCHAR is wide char if unicode defined
+  	# LPTSTR	lpDisplayName;
 	# SERVICE_STATUS_PROCESS ServiceStatusProcess;
 	# } ENUM_SERVICE_STATUS_PROCESS, *LPENUM_SERVICE_STATUS_PROCESS;
-
-	#
-	# Converts a hex string into an array of hashes representing an
-	# _ENUM_SERVICE_STATUS_PROCESS which is an array of _SERVICE_STATUS_PROCESS 
-	# with decimal windows constants.  hex_string normally comes from a PBLOB lpBuffer (Railgun)
-	#
-	def parse_enum_service_status_process_structure(hex_string, num_items_in_array)
-		print_debug "parsing #{hex_string.inspect} into #{num_items_in_array} services"
-		
-		# first, define the service status process data structure type
-		_SERVICE_STATUS_PROCESS = [
-				[:dwServiceType, :DWORD],
-				[:dwCurrentState, :DWORD],
-				[:dwControlsAccepted, :DWORD],
-				[:dwWin32ExitCode, :DWORD],
-				[:dwServiceSpecificExitCode, :DWORD],
-				[:dwCheckPoint, :DWORD],
-				[:dwWaitHint, :DWORD],
-				[:dwProcessId, :DWORD],
-				[:dwServiceFlags, :DWORD],
-		]
-		# now the enum service status process struct
-		_ENUM_SERVICE_STATUS_PROCESS = [
-				[:lpServiceName, :LPTSTR],
-				[:lpDisplayName, :LPTSTR],
-				[:serviceStatusProcess, _SERVICE_STATUS_PROCESS],
-		]
-		rg = session.railgun
-		client = session.platform
-		utility = Rex::Post::Meterpreter::Extensions::Stdapi::Railgun::Util.new(rg,client)
-		type, length, bufptr, buffer = nil
-		data = utility.read_array(_ENUM_SERVICE_STATUS_PROCESS,num_items_in_array, 0, hex_string)
-	end
 
 	#typedef struct _SERVICE_STATUS_PROCESS {
 	#	DWORD dwServiceType;
@@ -985,13 +1014,84 @@ protected
 	#}
 
 	#
+	# Converts a hex string into an array of hashes representing an
+	# _ENUM_SERVICE_STATUS_PROCESS which is an array of _SERVICE_STATUS_PROCESS 
+	# with decimal windows constants.  hex_string normally comes from a PBLOB lpBuffer (Railgun)
+	#
+	def parse_enum_service_status_process_structure(hex_string, num_items_in_array)
+		# first, define the service status process data structure type
+#		_SERVICE_STATUS_PROCESS = [
+#				[:dwServiceType, :DWORD],
+#				[:dwCurrentState, :DWORD],
+#				[:dwControlsAccepted, :DWORD],
+#				[:dwWin32ExitCode, :DWORD],
+#				[:dwServiceSpecificExitCode, :DWORD],
+#				[:dwCheckPoint, :DWORD],
+#				[:dwWaitHint, :DWORD],
+#				[:dwProcessId, :DWORD],
+#				[:dwServiceFlags, :DWORD],
+#		]
+		_SERVICE_STATUS_PROCESS = []
+		# we use SERVICE_PROCESS_STRUCT_NAMES as the keys so the api is consistent between shell/met
+		SERVICE_PROCESS_STRUCT_NAMES.each do |key|
+			_SERVICE_STATUS_PROCESS << [key, :DWORD]
+		end
+		_SERVICE_STATUS_PROCESS
+		# now the enum service status process struct
+#		_ENUM_SERVICE_STATUS_PROCESS = [
+#				[:lpServiceName, :LPSTR],
+#				[:lpDisplayName, :LPSTR],
+#				[:serviceStatusProcess, _SERVICE_STATUS_PROCESS],
+#		]
+		_ENUM_SERVICE_STATUS_PROCESS = [
+				[:service_name, :LPSTR],
+				[:display_name, :LPSTR],
+				[:serviceStatusProcess, _SERVICE_STATUS_PROCESS],
+		]
+		rg = session.railgun
+		data = rg.util.read_array(_ENUM_SERVICE_STATUS_PROCESS,num_items_in_array, 0, hex_string)
+		off = num_items_in_array*44
+		len = hex_string.length - off
+		arr_of_strings = ghetto_string_parse(hex_string, len, off, :UCHAR)
+		arr_of_names = arr_of_strings.select {|item| item if item.length > 1}
+		# if arr_of_names, display Names are first, and Service Names are second
+		# merge the correct names into the data array
+		# also, un-nest the nested hash which has the key :serviceStatusProcess
+		data_with_names_unnested = []
+		data.each_with_index do |val,idx|
+			val[:display_name] = arr_of_names[idx*2]
+			val[:service_name] = arr_of_names[idx*2+1]
+			data_with_names << val.delete(:serviceStatusProcess).merge(val)# un-nest
+		end
+		return data_with_names_unnested
+	end
+	#
+	# Parses a String of PBLOB for Ascii strings, returns array of strings
+	#
+	def ghetto_string_parse(buffer,length,offset,type=:UCHAR)
+		rg = session.railgun
+		arr_of_chars = rg.util.read_array(type, length, offset, buffer)
+		stacker=""
+		ret_array = []
+		arr_of_chars.each do |item|
+			if item == "\x00"
+				ret_array << stacker if stacker
+				stacker=""
+			else
+				stacker << item
+			end
+		end
+		return ret_array
+	end
+	
+	#
 	# Converts a hash into human readable service_status_process_structure info
 	# as a hash adding human readable commentary.  ssps_hash normally comes
 	# from parse_service_status_process_structure
 	#
 	def beautify_service_status_process_structure(ssps_hash,railgun_instance)
 		rg = railgun_instance
-		rg.const("SERVICE_QUERY_STATUS") # returns 4
+		rg.const("SERVICE_get_status") # returns 4
 		# TODO:  Is there any easy way to do this?
 	end
 	
