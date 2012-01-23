@@ -759,7 +759,7 @@ class Plugin::DbFun < Msf::Plugin
 				sub_items_list = []
 				@working_set = []			
 		
-				args.shift ## drop the table from the string		
+				args.shift ## drop the table from the string
 				
 				# Parse argument string
 				args.each_with_index do |arg,i|
@@ -806,7 +806,7 @@ class Plugin::DbFun < Msf::Plugin
 						match_condition = filter.split("~")
 						match_conditions[match_condition.first] = match_condition.last
 					end	
-				end	
+				end
 
 				print_status "Searching for #{class_name} with conditions..."
 
@@ -836,9 +836,7 @@ class Plugin::DbFun < Msf::Plugin
 						temp_item_set = temp_item_set + (eval("item.#{sub_items}"))
 					end					
 					item_set = temp_item_set
-					
 					print_deb " Item set is now: #{item_set.count} objects"
-					
 				end
 
 				#print_deb item_set.inspect
@@ -847,7 +845,16 @@ class Plugin::DbFun < Msf::Plugin
 				###
 				##	Filter items
 				###
-
+				
+				# first filter by workspace_id, unless workspace_id is a user-supplied filter
+				if not equal_conditions.has_key?("workspace_id") and not match_conditions.has_key?("workspace_id")
+					workspaceid = framework.db.workspace[:id] # the current active workspace id
+					item_set.delete_if do |item|
+						item.workspace_id != workspaceid
+					end
+				end
+				
+				# now apply the equals and matches filters to produce a working set
 				item_set.each do |item|
 					# Look through for the user-specified filters
 					equal_conditions.each_pair do |method,value|
@@ -862,7 +869,7 @@ class Plugin::DbFun < Msf::Plugin
 							# if they are searching for something akin to nil then
 							# let's match if the db_object entry is akin to nil
 							@working_set << item if self.is_nil_like?(db_object)
-						elsif db_object.to_s == value
+						elsif db_object.to_s == value.to_s
 							# otherwise we do a normal comparison
 							@working_set << item
 						end
