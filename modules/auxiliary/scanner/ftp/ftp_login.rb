@@ -60,6 +60,7 @@ class Metasploit3 < Msf::Auxiliary
 	def run_host(ip)
 		print_status("#{ip}:#{rport} - Starting FTP login sweep")
 		if check_banner
+			@@credentials_tried = {}
 			if datastore['RECORD_GUEST'] == false and check_anonymous == :next_user
 				@accepts_all_logins[@access] ||= []
 				@accepts_all_logins[@access] << ip
@@ -80,7 +81,11 @@ class Metasploit3 < Msf::Auxiliary
 					if datastore['RECORD_GUEST']
 						report_ftp_creds(user,pass,@access)
 					else
-						report_ftp_creds(user,pass,@access) unless @accepts_all_logins[@access].include?(ip)
+						if @accepts_all_logins[@access]
+							report_ftp_creds(user,pass,@access) unless @accepts_all_logins[@access].include?(ip)
+						else
+							report_ftp_creds(user,pass,@access)
+						end
 					end
 				end
 				ret
