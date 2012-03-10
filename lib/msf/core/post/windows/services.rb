@@ -298,17 +298,17 @@ protected
 		return services
 	end
 
-	def shell_service_running?(service_name)
+	def shell_service_running?(name)
 		# TODO:  Accomodate if @prefer_display_names ??
 		running_services = shell_service_list_running
-		return true if running_services.include?(service_name)
+		return true if running_services.include?(name)
 	end
 	
-	def shell_service_get_config(service_name)
+	def shell_service_get_config(name)
 		# TODO:  Accomodate if @prefer_display_names ??
 		service = {}
 		begin
-			cmd = "cmd.exe /c sc qc #{service_name.chomp}"
+			cmd = "cmd.exe /c sc qc #{name.chomp}"
 			results = session.shell_command_token_win32(cmd)
 			if results =~ /SUCCESS/
 				#[SC] QueryServiceConfig SUCCESS
@@ -341,12 +341,14 @@ protected
 		return service
 	end
 	
-	def shell_service_get_status(service_name)
+	def shell_service_get_status(name)
 		# TODO:  Accomodate if @prefer_display_names ??
 		service = {}
 		begin
 			cmd = "cmd.exe /c sc queryex #{name.chomp}"
+			print_good "cmd is #{cmd}"
 			results = session.shell_command_token_win32(cmd)
+			print_good "results are #{results}"
 			if results =~ /SERVICE_NAME/ # NOTE: you can't use /SUCCESS/ here
 				#SERVICE_NAME: winmgmt
 				#      TYPE          : 20  WIN32_SHARE_PROCESS
@@ -472,10 +474,10 @@ protected
 		end
 	end
 
-	def shell_service_delete(service_name)
+	def shell_service_delete(name)
 		# TODO:  Accomodate if @prefer_display_names ??
 		begin
-			cmd = "cmd.exe /c sc delete #{service_name}"
+			cmd = "cmd.exe /c sc delete #{name}"
 			results = session.shell_command_token_win32(cmd)
 			if results =~ /SUCCESS/
 				return nil
@@ -496,14 +498,14 @@ protected
 		end
 	end
 	
-	def shell_service_get_display_name(service_name)
+	def shell_service_get_display_name(name)
 		begin
-			cmd = "cmd.exe /c sc GetDisplayName #{service_name}"
+			cmd = "cmd.exe /c sc GetDisplayName #{name}"
 			results = session.shell_command_token_win32(cmd)
 			if results =~ /SUCCESS/
 				# can't use cliparse's win_parse_results here as MS failed to keep consistent output
 				# output looks like:  [SC] GetServiceDisplayName SUCCESS  Name = Windows Time
-				return results.split(/= +/).last
+				return results.split(/= +/).last.chomp
 			elsif results =~ /(^Error:.*|FAILED.*:)/
 				eh = win_parse_error(results)
 				raise Msf::Post::Windows::CliParse::ParseError.new(__method__,
@@ -559,6 +561,7 @@ protected
 				ret_array << h[:service_name]
 			end
 		end
+		return ret_array.sort
 	end
 
 	def meterpreter_service_list_running
@@ -574,11 +577,11 @@ protected
 				end
 			end
 		end
-		return ret_array
+		return ret_array.sort
 	end
 	
-	def meterpreter_service_running?(service_name)
-		h = meterpreter_service_get_status(service_name)
+	def meterpreter_service_running?(name)
+		h = meterpreter_service_get_status(name)
 		##print_debug "#{service_name}'s status hash is #{h.inspect}"
 		return true if h[:state].to_s =~ /4/
 		# otherwise
@@ -586,7 +589,7 @@ protected
 	end
 	
 	# returns hash
-	def meterpreter_service_get_status(service_name)
+	def meterpreter_service_get_status(name)
 		# must be a service name
 		rg = session.railgun
 		rg.add_dll('advapi32') unless rg.get_dll('advapi32') # load dll if not loaded
@@ -610,7 +613,7 @@ protected
 		end
 		# run the railgun query
 		begin
-			serv_handle,scum_handle = get_serv_handle(service_name)
+			serv_handle,scum_handle = get_serv_handle(name)
 			##print_debug "Railgunning queryservicestatusEx"
 			# TODO:  Use the dbBufSize = 0 method here instead of hardcoding 37
 			railhash = rg.advapi32.QueryServiceStatusEx(serv_handle,0,37,37,4)
@@ -669,10 +672,10 @@ protected
 		end
 	end
 
-	def meterpreter_service_start(service_name)
+	def meterpreter_service_start(name)
 		rg = session.railgun
 		begin
-			serv_handle,scum_handle = get_serv_handle(service_name,"SERVICE_START")
+			serv_handle,scum_handle = get_serv_handle(name,"SERVICE_START")
 			# railgun doesn't 'end
 			railhash = rg.advapi32.StartServiceA(serv_handle,0,nil)
 			if railhash["GetLastError"] == 0
@@ -691,11 +694,11 @@ protected
 		end
 	end
 
-	def meterpreter_service_stop(service_name)
+	def meterpreter_service_stop(name)
 		#TODO:  create a meterpreter_service_control, and bounce this method to it
 		rg = session.railgun
 		begin
-			serv_handle,scum_handle = get_serv_handle(service_name,"SERVICE_STOP")
+			serv_handle,scum_handle = get_serv_handle(name,"SERVICE_STOP")
 			railhash = rg.advapi32.ControlService(serv_handle,"SERVICE_CONTROL_STOP",4)
 			if railhash["GetLastError"] == 0
 				return nil
@@ -713,10 +716,10 @@ protected
 		end
 	end
 
-	def meterpreter_service_delete(service_name)
+	def meterpreter_service_delete(name)
 		rg = session.railgun
 		begin
-			serv_handle,scum_handle = get_serv_handle(service_name,"DELETE")
+			serv_handle,scum_handle = get_serv_handle(name,"DELETE")
 			railhash = rg.advapi32.DeleteService(serv_handle)
 			if railhash["GetLastError"] == 0
 				return nil
@@ -733,7 +736,7 @@ protected
 			rg.advapi32.CloseServiceHandle(scum_handle) if scum_handle
 		end
 	end
-	def meterpreter_service_get_config(service_name)
+	def meterpreter_service_get_config(name)
 		rg = session.railgun
 		if ! rg.advapi32.functions['QueryServiceConfigA']
 			# http://msdn.microsoft.com/en-us/library/windows/desktop/ms684932(v=vs.85).aspx
@@ -752,7 +755,7 @@ protected
 		end
 		begin
 			# get a scum handle
-			serv_handle,scum_handle = get_serv_handle(service_name)
+			serv_handle,scum_handle = get_serv_handle(name)
 
 			#print_debug "Running QueryServiceConfigA to get buf_size"
 			railhash = rg.advapi32.QueryServiceConfigA(serv_handle,4,0,4)
@@ -770,6 +773,8 @@ protected
 			railhash = rg.advapi32.QueryServiceConfigA(serv_handle,buf_size,buf_size,4)
 			if railhash["GetLastError"] == 0
 				lpServiceConfig = parse_query_service_config_structure(railhash["lpServiceConfig"])
+				# add a :service_name item in the hash to be consistent with the shell version
+				lsServiceConfig[:service_name] = name
 			else # there was an error, let's handle it
 				err = railhash["GetLastError"]
 				handle_railgun_error(err,__method__,"Error getting service config")
@@ -783,14 +788,14 @@ protected
 		end
 	end
 
-	def meterpreter_service_get_display_name(service_name)
-		h = meterpreter_service_get_config(service_name)
+	def meterpreter_service_get_display_name(name)
+		h = meterpreter_service_get_config(name)
 		h[:display_name]
 	end
 
-	def meterpreter_service_info(service_name)
+	def meterpreter_service_info(name)
 		#TODO:  deprecate for get_config
-		h = meterpreter_service_get_config(service_name)
+		h = meterpreter_service_get_config(name)
 		service = {}
 		begin
 			service["Name"] = h[:display_name] # <-- will fail right now, no display_name
@@ -1097,6 +1102,8 @@ protected
 		names = SERVICE_CONFIG_STRUCT_NAMES
 		arr_of_arrs = names.zip(hex_string.unpack("V8"))
 		hashish = Hash[*arr_of_arrs.flatten]
+		# convert type to hex to be consistent with shell version
+		hashish[:type]=hashish[:type].to_s(16)
 		# fix up the strings
 		len = hex_string.length - _TYPES.length*4
 		arr_of_strings = ghetto_string_parse(hex_string, len, _TYPES.length*4, :UCHAR)
