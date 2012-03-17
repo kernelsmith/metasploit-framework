@@ -338,7 +338,8 @@ protected
 			print_error(e.to_s)
 			return nil
 		end
-		return service
+		# cleanup a few items so they match what the meterpreter version returns
+		return cleanup_shell_struct_values(service)
 	end
 	
 	def shell_service_get_status(name)
@@ -346,9 +347,9 @@ protected
 		service = {}
 		begin
 			cmd = "cmd.exe /c sc queryex #{name.chomp}"
-			print_good "cmd is #{cmd}"
+			#print_good "cmd is #{cmd}"
 			results = session.shell_command_token_win32(cmd)
-			print_good "results are #{results}"
+			#print_good "results are #{results}"
 			if results =~ /SERVICE_NAME/ # NOTE: you can't use /SUCCESS/ here
 				#SERVICE_NAME: winmgmt
 				#      TYPE          : 20  WIN32_SHARE_PROCESS
@@ -375,7 +376,7 @@ protected
 			print_error(e.to_s)
 			return nil
 		end
-		return service
+		return cleanup_shell_struct_values(service)
 	end
 
 	def shell_service_change_startup(name,mode)
@@ -774,7 +775,8 @@ protected
 			if railhash["GetLastError"] == 0
 				lpServiceConfig = parse_query_service_config_structure(railhash["lpServiceConfig"])
 				# add a :service_name item in the hash to be consistent with the shell version
-				lsServiceConfig[:service_name] = name
+				lpServiceConfig[:service_name] = name
+				return lpServiceConfig
 			else # there was an error, let's handle it
 				err = railhash["GetLastError"]
 				handle_railgun_error(err,__method__,"Error getting service config")
@@ -798,7 +800,7 @@ protected
 		h = meterpreter_service_get_config(name)
 		service = {}
 		begin
-			service["Name"] = h[:display_name] # <-- will fail right now, no display_name
+			service["Name"] = h[:display_name]
 			service["Startup"] = normalize_mode(h[:start_type].to_i)
 			service["Command"] = h[:binary_path_name].to_s
 			service["Credentials"] = h[:service_start_name].to_s
@@ -989,6 +991,9 @@ protected
 		names = SERVICE_PROCESS_STRUCT_NAMES
 		arr_of_arrs = names.zip(hex_string.unpack("V8"))
 		hashish = Hash[*arr_of_arrs.flatten]
+		# convert type from decimal to hex to be consistent with shell version
+		hashish[:type] = hashish[:type].to_s(16)
+		hashish
 	end
 	
 	
@@ -1103,7 +1108,7 @@ protected
 		arr_of_arrs = names.zip(hex_string.unpack("V8"))
 		hashish = Hash[*arr_of_arrs.flatten]
 		# convert type to hex to be consistent with shell version
-		hashish[:type]=hashish[:type].to_s(16)
+		hashish[:type] = hashish[:type].to_s(16)
 		# fix up the strings
 		len = hex_string.length - _TYPES.length*4
 		arr_of_strings = ghetto_string_parse(hex_string, len, _TYPES.length*4, :UCHAR)
@@ -1116,6 +1121,27 @@ protected
 		hashish[:service_start_name] = arr_of_names.shift
 		hashish[:display_name] = arr_of_names.shift
 		return hashish
+	end
+	
+	def cleanup_shell_struct_values(hashish)
+		# takes hash values that look like "20 Running" and convert them to "20" only
+		# also convert 0x0 and "0  (0x0)" to just plain old 0
+		# also convert "" to nil
+		affected_attribs = [:state,:type,:win32_exit_code,:start_type,:error_control,:service_exit_code]
+		hashish.each_key do |k|
+			#print_good "checking #{k.to_s}"
+			if hashish[k] =~ / +0x0/
+				hashish[k] = 0
+			end
+			if hashish[k] == "" or hashish[k] =~ /^ +$/
+				hashish[k] = nil
+			end
+			if affected_attribs.include?(k)
+				#print_good "cleaning up #{hashish[k]}"
+				hashish[k] = hashish[k].split(" ").first if hashish[k]
+			end
+		end
+		hashish
 	end
 end
 
