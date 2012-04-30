@@ -1,0 +1,1 @@
+gcc -o hello_lua.bin hello_lua.c -Wall -I/usr/include/lua5.1/ -llua5.1
