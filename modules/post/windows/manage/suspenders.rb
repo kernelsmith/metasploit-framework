@@ -39,7 +39,7 @@ class Metasploit3 < Msf::Post
 				was inspired by mubix's blog which was inpsired by Didier Stevens' Suspender.dll. },
 				'License' => MSF_LICENSE,
 				'Author' => [	'kerberos', # original meterpreter script
-								'kernelsmith' # post module, ability to do multiple processes
+								'kernelsmith' # post module, ability to do multiple processes, 64bit
 							],
 				'Version' => '$Revision$',
 				'Platform' => [ 'windows' ],
@@ -257,7 +257,9 @@ class Metasploit3 < Msf::Post
 			end
 		rescue ::Rex::Post::Meterpreter::RequestError => e
 			print_error "Error suspending the process threads:  #{e.to_s}"
-			check_halt "You may not have the correct permissions (PROCESS_ALL_ACCESS)..."
+			check_halt "You may not have the correct permissions, try migrating to " +
+						"a proces with the same owner as the target process(es).  Also " +
+						"consider running the win_privs post module and confirm SeDebug priv."
 		ensure
 			targetprocess.close if targetprocess
 		end
