@@ -185,13 +185,7 @@ protected
 	##
 	# Generic registry manipulation methods based on reg.exe
 	##
-	
-	#REG_NONE                 = 0	#REG_DWORD_LITTLE_ENDIAN  = 4
-	#REG_SZ                   = 1	#REG_DWORD_BIG_ENDIAN     = 5
-	#REG_EXPAND_SZ            = 2	#REG_LINK                 = 6
-	#REG_BINARY               = 3	#REG_MULTI_SZ             = 7
-	#REG_DWORD                = 4
-	
+
 	def shell_registry_key_exist?(key)
 		key = normalize_key(key) # DO NOT use check_valid_key here cuz it would cause an INF LOOP
 		begin
@@ -207,8 +201,9 @@ protected
 		key = normalize_key(key) # don't use check_valid_key here cuz we don't want it to raise an err
 		begin
 			v = self.shell_registry_getvaldata(key,valname)
-			return true if (v and !v.empty?)
-		rescue # rescue everything and just return false, should we be more selective?
+			return true if v
+		rescue Exception => e  # rescue everything and just return false, should we be more selective?
+			#print_debug "returning false due to error:  e.to_s"
 			return false
 		end
 		return false
@@ -310,8 +305,6 @@ protected
 	def shell_registry_enumkeys(key)
 		# Absolutely DO NOT call check_valid_key here, would cause an INFINITE LOOP
 		subkeys = []
-		reg_data_types = 'REG_SZ|REG_MULTI_SZ|REG_DWORD_BIG_ENDIAN|REG_DWORD|REG_BINARY|' 
-		reg_data_types << 'REG_DWORD_LITTLE_ENDIAN|REG_NONE|REG_EXPAND_SZ|REG_LINK|REG_FULL_RESOURCE_DESCRIPTOR' 
 		begin
 			bslashes = key.count('\\')
 			cmd = "cmd.exe /c reg query \"#{key}\""
@@ -341,13 +334,11 @@ protected
 
 	def shell_registry_enumvals(key)  #gets
 		values = []
-		reg_data_types = 'REG_SZ|REG_MULTI_SZ|REG_DWORD_BIG_ENDIAN|REG_DWORD|REG_BINARY|' 
-		reg_data_types << 'REG_DWORD_LITTLE_ENDIAN|REG_NONE|REG_EXPAND_SZ|REG_LINK|REG_FULL_RESOURCE_DESCRIPTOR'
 		begin
 			# REG QUERY KeyName [/v ValueName | /ve] [/s]
 			cmd = "cmd.exe /c reg query \"#{key}\""
 			results = session.shell_command_token_win32(cmd)
-			if values = results.scan(/^ +.*[#{reg_data_types}].*/)
+			if values = results.scan(/^ +.*[#{REG_DATA_TYPES}].*/)
 				# yanked the lines with legit REG value types like REG_SZ
 				# now let's parse out the names (first field basically)
 				values.collect! do |line|
@@ -377,7 +368,7 @@ protected
 		end
 	end
 
-	def shell_registry_getvalinfo(key, valname)  #gets
+	def shell_registry_getvalinfo(key, valname)
 		info = {}
 		begin
 			# REG QUERY KeyName [/v ValueName | /ve] [/s]
@@ -387,8 +378,8 @@ protected
 				# pull out the interesting line (the one with the value name in it)
 				# and split it with ' ' yielding [valname,REGvaltype,REGdata]
 				split_arr = match_arr[0].split(' ')
-				info["Type"] = split_arr[1]
-				info["Data"] = split_arr[2]
+				info["Type"] = normalize_reg_data_type(split_arr[1])
+				info["Data"] = normalize_reg_data_val(split_arr[2],info["Type"])
 				return info
 			elsif results =~ /^Error:/
 				return nil
@@ -477,7 +468,6 @@ protected
 		begin
 			client.sys.config.getprivs()
 			root_key, base_key = session.sys.registry.splitkey(key)
-			#print_debug("Loading file #{file}")
 			begin
 				loadres= session.sys.registry.load_key(root_key,base_key,file)
 			rescue Rex::Post::Meterpreter::RequestError => e
@@ -495,7 +485,6 @@ protected
 					print_error("An unknown error has occured: #{loadres.to_s}")
 					# raise error
 				else
-					#print_debug("Registry Hive Loaded Successfully: #{key}")
 					return nil
 				end
 			end
@@ -521,7 +510,6 @@ protected
 					print_error("An unknown error has occured: #{unloadres.to_s}")
 					# raise error
 				else
-					#print_debug("Registry Hive Unloaded Successfully: #{key}")
 					return nil
 				end
 			end
@@ -615,8 +603,8 @@ protected
 			open_key = session.sys.registry.open_key(root_key, base_key, KEY_READ)
 			return nil if !open_key
 			v = open_key.query_value(valname)
-			value["Data"] = v.data
-			value["Type"] = v.type
+			value["Data"] = normalize_reg_data_val(v.data,v.type)
+			value["Type"] = normalize_reg_data_type(v.type)
 		rescue Rex::Post::Meterpreter::RequestError => e
 			return nil
 		
