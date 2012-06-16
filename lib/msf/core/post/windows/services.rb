@@ -13,6 +13,10 @@ module WindowsServices
 		:checkpoint,:wait_hint,:pid,:flags]
 	SERVICE_CONFIG_STRUCT_NAMES = [:type,:start_type,:error_control,:binary_path_name,
 		:load_order_group,:tag,:dependencies,:service_start_name,:display_name]
+	# these aren't quite the same names as used for the win api constants
+	STOPPABLE			=	1	# is really SERVICE_ACCEPT_SHUTDOWN
+	PAUSABLE			=	2	# SERVICE_ACCEPT_PAUSE_CONTINUE
+	ACCEPTS_SHUTDOWN	=	4	# SERVICE_ACCEPT_STOP
 
 	include Msf::Post::Windows::CliParse
 	include Msf::Post::Windows::Railgun
@@ -363,6 +367,11 @@ protected
 				#      FLAGS          :
 				# 
 				service = win_parse_results(results)
+				# we need to specially handle the line under STATE, those are controls
+				ma = /\([A-Z_,]+\)/.match(results) # look for the (CRAP,CR_UD) part
+				sa = ma[0].gsub("(","").gsub(")","").split(',') #strip parens and split up by ','
+				# ok now we have an array of CONST NAMES, we need the int vals added together
+				
 			elsif results =~ /(^Error:.*|FAILED.*:)/
 				return nil
 			elsif results =~ /SYNTAX:/
@@ -826,26 +835,6 @@ protected
 			return false
 		end
 	end
-
-	# Ensures mode is sane, like what sc.exe wants to see, e.g. 2 or "AUTO_START" etc returns "auto"
-	# If the second argument it true, integers are returned instead of strings  
-	#
-	def normalize_mode(mode,i=false)
-		mode = mode.to_s # someone could theoretically pass in a 2 instead of "2"
-		# accepted boot|system|auto|demand|disabled
-		if mode =~ /(0|BOOT)/i
-			mode = i ? 0 : 'boot' # mode is 'boot', unless i is true, then it's 0
-		elsif mode =~ /(1|SYSTEM)/i
-			mode = i ? 1 : 'system'
-		elsif mode =~ /(2|AUTO)/i
-			mode = i ? 2 : 'auto'
-		elsif mode =~ /(3|DEMAND|MANUAL)/i
-			mode = i ? 3 : 'demand'
-		elsif mode =~ /(4|DISABLED)/i
-			mode = i ? 4 : 'disabled'
-		end
-		return mode		
-	end
 	
 	def handle_railgun_error(error_code, blame_method, message, filter_regex=nil)
 		err_name_array = lookup_error(error_code,filter_regex)
@@ -991,8 +980,12 @@ protected
 		names = SERVICE_PROCESS_STRUCT_NAMES
 		arr_of_arrs = names.zip(hex_string.unpack("V8"))
 		hashish = Hash[*arr_of_arrs.flatten]
-		# convert type from decimal to hex to be consistent with shell version
-		hashish[:type] = hashish[:type].to_s(16)
+		# convert data types for consistent API across shell/meterp
+		# and we drop the :controls key and val cuz it's a PITA to do the shell ver
+		hashish.delete(:controls)
+		hashish.each_pair do |k,v|
+			hashish[k] = normalize_stupid_win_hex(v)
+		end
 		hashish
 	end
 	
@@ -1107,8 +1100,6 @@ protected
 		names = SERVICE_CONFIG_STRUCT_NAMES
 		arr_of_arrs = names.zip(hex_string.unpack("V8"))
 		hashish = Hash[*arr_of_arrs.flatten]
-		# convert type to hex to be consistent with shell version
-		hashish[:type] = hashish[:type].to_s(16)
 		# fix up the strings
 		len = hex_string.length - _TYPES.length*4
 		arr_of_strings = ghetto_string_parse(hex_string, len, _TYPES.length*4, :UCHAR)
@@ -1120,6 +1111,10 @@ protected
 		hashish[:dependencies] = arr_of_names.shift
 		hashish[:service_start_name] = arr_of_names.shift
 		hashish[:display_name] = arr_of_names.shift
+		# convert data types for consistent API across shell/meterp
+		hashish.each_pair do |k,v|
+			hashish[k] = normalize_stupid_win_hex(v)
+		end
 		return hashish
 	end
 	
@@ -1127,19 +1122,34 @@ protected
 		# takes hash values that look like "20 Running" and convert them to "20" only
 		# also convert 0x0 and "0  (0x0)" to just plain old 0
 		# also convert "" to nil
-		affected_attribs = [:state,:type,:win32_exit_code,:start_type,:error_control,:service_exit_code]
-		hashish.each_key do |k|
-			#print_good "checking #{k.to_s}"
-			if hashish[k] =~ / +0x0/
-				hashish[k] = 0
-			end
-			if hashish[k] == "" or hashish[k] =~ /^ +$/
-				hashish[k] = nil
-			end
+		# additionally sc will return "20 WIN32_SHARE_PROCESS" where 20 is hex 20
+		# but not prefixed with 0x, so to permit proper parsing we add it in
+		affected_attribs = [:state,:type,:win32_exit_code,:start_type,:error_control, 
+							:service_exit_code]
+		# this is annoying cuz we can get
+		#TYPE               : 20  WIN32_SHARE_PROCESS
+        #STATE              : 1  STOPPED
+        #                       (NOT_STOPPABLE,NOT_P...)  # we're just gonna drop this crap, PITA
+        #WIN32_EXIT_CODE    : 1077       (0x435)
+		# where the 20 was hex, but the 1077 is decimal.
+		hashish.each_pair do |k,v|
 			if affected_attribs.include?(k)
-				#print_good "cleaning up #{hashish[k]}"
-				hashish[k] = hashish[k].split(" ").first if hashish[k]
+				#print_debug "key:#{k.to_s} val:#{v.to_s} sending \"#{v.split(" ").first}\" for conv"
+				# if it's affected, then test which val might have a 0x starting it after parens
+				items = v.split # could now be "20","WIN32" etc or "1077","(0x435)"
+				# pick the first one starting with 0x and remove parens if present
+				#  otherwise just pick the first and prepend 0x
+				items.each_with_index do |thing,idx|
+					items[idx] = thing.sub("(",'').sub(")",'')
+				end
+				v = items.select {|thing| thing if thing =~ /^0x/}.first # nil if none selected
+				v = items[0] unless v # assign the first val as default if select didn't work
+				v = "0x" + v unless v =~ /^0x/
+				hashish[k] = normalize_stupid_win_hex(v)
+			else
+				hashish[k] = normalize_stupid_win_hex(v)
 			end
+			#print_debug "postconver val:#{hashish[k].to_s}"
 		end
 		hashish
 	end

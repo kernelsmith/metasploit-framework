@@ -9,6 +9,10 @@ module CliParse
 	require 'rex/logging'
 	require 'rex/exceptions'
 
+	# some constants
+	REG_DATA_TYPES = 'REG_SZ|REG_MULTI_SZ|REG_DWORD_BIG_ENDIAN|REG_DWORD|REG_BINARY|' +
+	'REG_DWORD_LITTLE_ENDIAN|REG_NONE|REG_EXPAND_SZ|REG_LINK|REG_FULL_RESOURCE_DESCRIPTOR'
+
 	#Msf::Post::Windows::CliParse::ParseError
 	class ParseError < ArgumentError
 		def initialize(method, einfo='', ecode=nil, clicmd=nil)
@@ -100,6 +104,10 @@ module CliParse
 				lastkey = k
 			end
 		end
+		# finally, do type conversion as applicable
+		hashish.each_pair do |k,v|
+			hashish[k] = normalize_stupid_win_hex(v)
+		end
 		return hashish
 	end
 
@@ -152,6 +160,111 @@ module CliParse
 		return hashish
 	end
 
+	def normalize_reg_data_val(val,type)
+		# we want to normalize stuff but we need to be wary of what type of data
+		# is being processes, and by type we mean windows type
+		# we might get "alwayson" or "0x0A" or "1001" etc
+		# if we get an integer, we assume it's already correct and return it
+		return val if val.class == Fixnum
+		# otherwise we have to use the type to figure it out
+		case normalize_reg_data_type(type)
+		when 0 #REG_NONE
+			# then we have no idea what to do with the val so we return it
+			return val
+		when 1 #REG_SZ: A null-terminated string] Running against session 1
+			# we want to normalize w/o major changes, so we only rstrip to kill any nulls
+			return val.to_s.rstrip # I wonder if unpack("A*").join would be better?
+		when 2 #REG_EXPAND_SZ null-terminated string containing unexpanded refs to env vars
+			# we're not going to play dat, we just treat it as a string
+			return val.to_s.rstrip # I wonder if unpack("A*").join would be better?
+		when 3 #REG_BINARY duh.
+			return val.to_i(2)
+		when 4 #REG_WORD 32-bit number
+			if val =~ /x/
+				return val.hex.to_i
+			else
+				return val.to_i
+			end
+		when 5 #REG_DWORD_BIG_ENDIAN A 32-bit number in big-endian format.
+			return val.unpack("N*") # TODO:  this is crap, just guessing
+		when 6 #REG_LINK A null-terminated Unicode string that contains the target path of a
+			#symbolic link created by calling the RegCreateKeyEx function w/ REG_OPTION_CREATE_LINK
+			return val.to_s.rstrip # I wonder if unpack("A*").join would be better?
+		when 7 #REG_MULTI_SZ
+			return val.split(/\0/)
+		else return nil
+		end
+	end
+
+	def normalize_reg_data_type(type)
+		#TODO: integrate with railgun's api manager to reduce duplication?
+		return type if type.class == Fixnum
+		return nil if not type =~ /^REG_/
+		type = type.to_s.strip
+		case type
+		when /REG_NONE/
+			return 0
+		when /REG_SZ/
+			return 1
+		when /REG_EXPAND_SZ/
+			return 2
+		when /REG_BINARY/
+			return 3
+		when /REG_DWORD/
+			return 4
+		when /REG_DWORD_BIG_ENDIAN/
+			return 5
+		when /REG_LINK/
+			return 6
+		when /REG_MULTI_SZ/
+			return 7
+		else return nil
+		end
+	end
+
+	# Ensures mode is sane, like what sc.exe wants to see, e.g. 2 or "AUTO_START" etc returns "auto"
+	# If the second argument it true, integers are returned instead of strings  
+	#
+	def normalize_mode(mode,i=false)
+		mode = mode.to_s # someone could theoretically pass in a 2 instead of "2"
+		# accepted boot|system|auto|demand|disabled
+		case mode
+		when /(0|BOOT)/i
+			mode = i ? 0 : 'boot' # mode is 'boot', unless i is true, then it's 0
+		when /(1|SYSTEM)/i
+			mode = i ? 1 : 'system'
+		when /(2|AUTO)/i
+			mode = i ? 2 : 'auto'
+		when /(3|DEMAND|MANUAL)/i
+			mode = i ? 3 : 'demand'
+		when /(4|DISABLED)/i
+			mode = i ? 4 : 'disabled'
+		else
+			mode = nil
+		end
+		return mode		
+	end
+
+	def normalize_stupid_win_hex(str)
+		# str could be stuff like "fix", "0x0", "0x01", "0"
+		return str if str.class == Fixnum # dumb, rules out any shenanigans
+		return nil if str == ""
+		if is_valid_hex?(str)
+			# then convert this hex string to hex and then to int
+			return str.hex.to_i
+		elsif is_valid_int?(str)
+			return str.to_i
+		end
+		# otherwise return this presumably straight up string
+		return str
+	end
+	def is_valid_hex?(str)
+		# NOTE: this will not trigger if vals not prefixed with "0x", looking at you service type..
+		str =~ /^0x[a-fA-F0-9]*$/
+	end
+	def is_valid_int?(str)
+		str =~ /^[0-9]+$/ # don't want "" to return 0, prefer nil
+	end
 end
 
 end

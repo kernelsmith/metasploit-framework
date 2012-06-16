@@ -12,7 +12,9 @@
 
 require 'msf/core'
 require 'rex'
-require 'msf/core/post/windows/registry'
+#require 'msf/core/post/windows/registry'
+Kernel.load 'msf/core/post/windows/registry.rb'
+Kernel.load 'msf/core/post/windows/cli_parse.rb'
 
 class Metasploit3 < Msf::Post
 

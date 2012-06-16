@@ -4,8 +4,9 @@
 
 require 'msf/core'
 require 'rex'
-# TODO:  change this back to require 'msf/core/post/windows/services' 
-load 'msf/core/post/windows/services.rb'
+#require 'msf/core/post/windows/services' 
+Kernel.load 'msf/core/post/windows/services.rb'
+Kernel.load 'msf/core/post/windows/cli_parse.rb'
 
 class Metasploit3 < Msf::Post
 
@@ -60,18 +61,18 @@ class Metasploit3 < Msf::Post
 		print_status()
 		print_status("TESTING service_get_status on servicename: #{datastore["QSERVICE"]}")
 		results = service_get_status(datastore['QSERVICE'])
-		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
+		print_status("RESULTS: #{results.class} #{results.sort_by {|key,val| key.to_s}.pretty_inspect}")
 
 		print_status()
 		print_status("TESTING service_list")
 		results = service_list
-		print_status("RESULTS: #{results.class} \n#{results.pretty_inspect}")
+		print_status("RESULTS: #{results.class} \n#{results.sort_by {|key,val| key.to_s}.pretty_inspect}")
 
 		#  SERVICE QUERY METHODS
 		print_status()
 		print_status("TESTING service_list_running")
 		results = service_list_running
-		print_status("RESULTS: #{results.class} \n#{results.pretty_inspect}")
+		print_status("RESULTS: #{results.class} \n#{results.sort.pretty_inspect}")
 
 		print_status "TESTING service_running?(#{datastore['QSERVICE']})"
 		results = service_running?(datastore['QSERVICE'])
@@ -80,7 +81,7 @@ class Metasploit3 < Msf::Post
 		print_status()
 		print_status("TESTING service_get_config on servicename: #{datastore["QSERVICE"]}")
 		results = service_get_config(datastore['QSERVICE'])
-		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
+		print_status("RESULTS: #{results.class} #{results.sort_by {|key,val| key.to_s}.pretty_inspect}")
 
 		print_status()
 		print_status("TESTING service_get_status on servicename: #{datastore["QSERVICE"]}")
@@ -99,7 +100,7 @@ class Metasploit3 < Msf::Post
 		results = service_change_startup(datastore['QSERVICE'],datastore['MODE'])
 		print_status("RESULTS (Expecting nil on success): #{results.class} #{results.pretty_inspect}")
 		print_status("Current status of this service " + 
-					"#{service_get_status(datastore['QSERVICE']).pretty_inspect}") if blab
+					"#{service_get_status(datastore['QSERVICE']).sort_by {|key,val| key.to_s}.pretty_inspect}") if blab
 
 		print_status()
 		print_status("TESTING service_create on servicename: #{datastore['NSERVICE']} using\n" +
@@ -139,7 +140,7 @@ class Metasploit3 < Msf::Post
 		print_status()
 		print_status("TESTING service_info on servicename: #{datastore["QSERVICE"]}")
 		results = service_info(datastore['QSERVICE'])
-		print_status("RESULTS: #{results.class} #{results.pretty_inspect}")
+		print_status("RESULTS: #{results.class} #{results.sort_by {|key,val| key.to_s}.pretty_inspect}")
 		print_status()
 		print_status("Testing complete.")
 		rescue NotImplementedError => e
