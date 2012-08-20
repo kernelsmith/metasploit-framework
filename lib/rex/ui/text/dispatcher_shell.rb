@@ -359,53 +359,63 @@ module DispatcherShell
 	end
 
 	#
-	# Run a single command line.
+	# Run a single command line.  The line can have multiple commands separated by ";" ('\;' to escape)
 	#
-	def run_single(line)
-		arguments = parse_line(line)
-		method    = arguments.shift
-		found     = false
-		error     = false
+	def run_single(theline)
+		# parse theline to see if it has multiple commands within it
+		lines = parse_multiline(theline)
+		all_commands_found = true
+		lines.each do |line|
+			arguments = parse_line(line)
+			method    = arguments.shift
+			found     = false
+			error     = false
 
-		# If output is disabled output will be nil
-		output.reset_color if (output)
+			# If output is disabled output will be nil
+			output.reset_color if (output)
 
-		if (method)
-			entries = dispatcher_stack.length
+			if (method)
+				entries = dispatcher_stack.length
 
-			dispatcher_stack.each { |dispatcher|
-				next if not dispatcher.respond_to?('commands')
+				# run the command on each dispatcher which responds to the command
+				dispatcher_stack.each { |dispatcher|
+					next if not dispatcher.respond_to?('commands')
 
-				begin
-					if (dispatcher.commands.has_key?(method) or dispatcher.deprecated_commands.include?(method))
-						self.on_command_proc.call(line.strip) if self.on_command_proc
-						run_command(dispatcher, method, arguments)
-						found = true
+					begin
+						# TODO:  update this to use is_valid_dispatcher_command once that is committed from aliasing
+						if (dispatcher.commands.has_key?(method) or dispatcher.deprecated_commands.include?(method))
+							self.on_command_proc.call(line.strip) if self.on_command_proc
+							run_command(dispatcher, method, arguments)
+							found = true
+						end
+					rescue
+						error = $!
+
+						print_error(
+							"Error while running command #{method}: #{$!}" +
+							"\n\nCall stack:\n#{$@.join("\n")}")
+					rescue ::Exception
+						error = $!
+
+						print_error(
+							"Error while running command #{method}: #{$!}")
 					end
-				rescue
-					error = $!
 
-					print_error(
-						"Error while running command #{method}: #{$!}" +
-						"\n\nCall stack:\n#{$@.join("\n")}")
-				rescue ::Exception
-					error = $!
+					# If the dispatcher stack changed as a result of this command,
+					# break out the each enumerator
+					break if (dispatcher_stack.length != entries)
+				}
 
-					print_error(
-						"Error while running command #{method}: #{$!}")
+				if (found == false and error == false)
+					# what to do if we didn't find one of the commands?  Continue processing the other commands
+					# or cease processing further commands?  For now we continue, unless there are objections
+					# otherwise we could: return false if not all_commands_found
+					all_commands_found = false 
+					unknown_command(method, line)
 				end
-
-				# If the dispatcher stack changed as a result of this command,
-				# break out
-				break if (dispatcher_stack.length != entries)
-			}
-
-			if (found == false and error == false)
-				unknown_command(method, line)
 			end
-		end
-
-		return found
+		end # end lines.each
+		return all_commands_found
 	end
 
 	#

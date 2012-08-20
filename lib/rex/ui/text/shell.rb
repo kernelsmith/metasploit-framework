@@ -332,6 +332,54 @@ module Shell
 protected
 
 	#
+	# Parse a multiline into an array of lines
+	#
+	def parse_multiline(line, sep=";",esc="\\")
+		log_input(line)
+
+		line.gsub!(/(\r|\n)/, '') # remove new line chars
+
+		# TODO:  turn this into a Rex::Parser::Multiline?
+		begin
+			# cases:  "stuff", "stuff;more", "stuff\;", "stuff\;more", "stuff;more\;evenmore\", "stuff\\"
+			#  			"stuff\;more\;evenmore"
+			# we want to split on sep but not if it's preceeded by esc, i.e. it's escaped
+			# ruby < 1.9 does not support negative look behinds, so we do this ghetto style
+			lines = []
+			# Check if the whole line has a trailing esc+sep so we can tell '\' from '\;' for example
+			r_esc = Regexp.escape(esc)
+			r_sep = Regexp.escape(sep)
+			r = Regexp.new(r_esc + r_sep + '$')
+			trailer = line.match(r)
+
+			# Split the line up by ';' into lines
+			lines = line.split(';')
+
+			if lines.length > 0
+				lines.each_with_index do |l,idx|
+					if l =~ /\\$/ # at this point if it ends with an esc, it had been escaped so we fix it
+						if (idx == (lines.length -1) and trailer)
+							# if it's the very last one & there was a trailer, that needs special handling
+							# this handles the corner case where the last line actually ended with the esc char but not the sep
+							next # we just leave the esc char on there
+						else # replace esc char with sep, concat this in w/the next item, and delete the current
+							lines[idx+1] = l.sub(Regexp.new(r_esc + "$"), sep) + lines[idx+1]
+							# this way the line will get processed again, in case there's more than one escape sequence in the line
+							# now delete the current line
+							lines.delete_at(idx)
+						end
+					end
+				end
+			end
+			return lines
+		rescue ::ArgumentError
+			print_error("Parse error: #{$!}")
+		end
+		# last resort, return []
+		return []
+	end
+
+	#
 	# Parse a line into an array of arguments.
 	#
 	def parse_line(line)
