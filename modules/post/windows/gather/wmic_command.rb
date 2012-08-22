@@ -5,8 +5,8 @@
 ##
 # ## This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 require 'msf/core'
@@ -19,7 +19,7 @@ class Metasploit3 < Msf::Post
 
 	def initialize(info={})
 		super( update_info( info,
-			'Name'          => 'Windows Gather Run Specified WMIC command',
+			'Name'          => 'Windows Gather Run Specified WMIC Command',
 			'Description'   => %q{ This module will execute a given WMIC command options or read
 				WMIC commands options from a resource file and execute the commands in the
 				specified Meterpreter session.},

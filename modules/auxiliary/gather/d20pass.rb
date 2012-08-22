@@ -2,8 +2,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 ##
@@ -65,7 +65,7 @@ class Metasploit3 < Msf::Auxiliary
 		if (ip or rhost) and rport
 			[(ip || rhost),rport].map {|x| x.to_s}.join(":") << " "
 		elsif (ip or rhost)
-			"#{rhost}"
+			rhost
 		else
 			""
 		end
@@ -197,9 +197,9 @@ class Metasploit3 < Msf::Auxiliary
 		f.seek(userentryptr + 40) # sorry decimal
 		entrylen = makeword(f.read(2)) # sorry this is decimal
 		logins = Rex::Ui::Text::Table.new(
-					'Header' => "D20 usernames, passwords, and account levels\n(use for TELNET authentication)",
-					'Indent' => 1,
-					'Columns' => ["Type", "User Name", "Password"])
+			'Header' => "D20 usernames, passwords, and account levels\n(use for TELNET authentication)",
+			'Indent' => 1,
+			'Columns' => ["Type", "User Name", "Password"])
 
 		0.upto(numentries -1).each do |i|
 			f.seek(dstart + headerlen + i * entrylen)

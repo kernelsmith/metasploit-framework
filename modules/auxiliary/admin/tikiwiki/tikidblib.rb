@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 require 'msf/core'
@@ -17,7 +17,7 @@ class Metasploit3 < Msf::Auxiliary
 
 	def initialize(info = {})
 		super(update_info(info,
-			'Name'           => 'TikiWiki information disclosure',
+			'Name'           => 'TikiWiki Information Disclosure',
 			'Description'    => %q{
 					A vulnerability has been reported in Tikiwiki, which can be exploited by
 				a anonymous user to dump the MySQL user & passwd just by creating a mysql

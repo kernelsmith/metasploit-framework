@@ -1,3 +1,4 @@
+# -*- coding: binary -*-
 require 'msf/ui/console/command_dispatcher/encoder'
 require 'msf/ui/console/command_dispatcher/exploit'
 require 'msf/ui/console/command_dispatcher/nop'
@@ -231,7 +232,8 @@ class Core
 			begin
 				[
 					::Msf::Config.script_directory + File::SEPARATOR + "resource",
-					::Msf::Config.user_script_directory + File::SEPARATOR + "resource"
+					::Msf::Config.user_script_directory + File::SEPARATOR + "resource",
+					"."
 				].each do |dir|
 					next if not ::File.exist? dir
 					tabs += ::Dir.new(dir).find_all { |e|
@@ -940,7 +942,7 @@ class Core
 
 		# Parse any extra options that should be passed to the plugin
 		args.each { |opt|
-			k, v = opt.split(/=/)
+			k, v = opt.split(/\=/)
 
 			opts[k] = v if (k and v)
 		}
@@ -973,17 +975,28 @@ class Core
 	# Tab completion for the load command
 	#
 	def cmd_load_tabs(str, words)
-		return [] if words.length > 1
+		tabs = []
 
-		begin
-			return Dir.new(Msf::Config.plugin_directory).find_all { |e|
-				path = Msf::Config.plugin_directory + File::SEPARATOR + e
-				File.file?(path) and File.readable?(path)
-			}.map { |e|
-				e.sub!(/\.rb$/, '')
-			}
-		rescue Exception
+		if (not words[1] or not words[1].match(/^\//))
+			# then let's start tab completion in the scripts/resource directories
+			begin
+				[
+					Msf::Config.user_plugin_directory,
+					Msf::Config.plugin_directory
+				].each do |dir|
+					next if not ::File.exist? dir
+					tabs += ::Dir.new(dir).find_all { |e|
+						path = dir + File::SEPARATOR + e
+						::File.file?(path) and File.readable?(path)
+					}
+				end
+			rescue Exception
+			end
+		else
+			tabs += tab_complete_filenames(str,words)
 		end
+		return tabs.map{|e| e.sub(/.rb/, '')}
+
 	end
 
 	def cmd_route_help
@@ -1220,7 +1233,7 @@ class Core
 				curr_path = path
 
 				# Load modules, but do not consult the cache
-				if (counts = framework.modules.add_module_path(path, false))
+				if (counts = framework.modules.add_module_path(path))
 					counts.each_pair { |type, count|
 						totals[type] = (totals[type]) ? (totals[type] + count) : count
 
@@ -1291,7 +1304,8 @@ class Core
 			"author"   => "Modules written by this author",
 			"cve"      => "Modules with a matching CVE ID",
 			"bid"      => "Modules with a matching Bugtraq ID",
-			"osvdb"    => "Modules with a matching OSVDB ID"
+			"osvdb"    => "Modules with a matching OSVDB ID",
+			"edb"      => "Modules with a matching Exploit-DB ID"
 		}.each_pair do |keyword, description|
 			print_line "  #{keyword.ljust 10}:  #{description}"
 		end
@@ -1319,16 +1333,43 @@ class Core
 				match += val + " "
 			end
 		}
+		
+		if framework.db and framework.db.migrated and framework.db.modules_cached
+			return search_modules_sql(match)
+		end
+		
+		print_error("Warning: database not connected or cache not built, falling back to slow search")
 
 		tbl = generate_module_table("Matching Modules")
-		framework.modules.each do |m|
-			o = framework.modules.create(m[0])
-			if not o.search_filter(match)
-				tbl << [ o.fullname, o.disclosure_date.to_s, o.rank_to_s, o.name ]
+		[ 
+			framework.exploits, 
+			framework.auxiliary, 
+			framework.post, 
+			framework.payloads, 
+			framework.nops,
+			framework.encoders 
+		].each do |mset|
+			mset.each do |m|
+				o = mset.create(m[0])
+				
+				# Expected if modules are loaded without the right pre-requirements
+				next if not o
+				
+				if not o.search_filter(match)
+					tbl << [ o.fullname, o.disclosure_date.to_s, o.rank_to_s, o.name ]
+				end
 			end
 		end
 		print_line(tbl.to_s)
 
+	end
+	
+	def search_modules_sql(match)
+		tbl = generate_module_table("Matching Modules")
+		framework.db.search_modules(match).each do |o|
+			tbl << [ o.fullname, o.disclosure_date.to_s, RankingName[o.rank].to_s, o.name ]
+		end
+		print_line(tbl.to_s)
 	end
 
 	def cmd_search_tabs(str, words)
@@ -1485,7 +1526,7 @@ class Core
 					end
 					sessions.each do |s|
 						session = framework.sessions.get(s)
-						print_status("Running '#{cmd}' on #{session.type} session #{s} (#{session.tunnel_peer})")
+						print_status("Running '#{cmd}' on #{session.type} session #{s} (#{session.session_host})")
 
 						if (session.type == "meterpreter")
 							# If session.sys is nil, dont even try..
@@ -1587,7 +1628,7 @@ class Core
 				sessions.each do |s|
 					if ((session = framework.sessions.get(s)))
 						if (script_paths[session.type])
-							print_status("Session #{s} (#{session.tunnel_peer}):")
+							print_status("Session #{s} (#{session.session_host}):")
 							begin
 								session.execute_file(script_paths[session.type], extra)
 							rescue ::Exception => e
@@ -1690,6 +1731,14 @@ class Core
 			global = true
 		end
 
+		# Decide if this is an append operation
+		append = false
+
+		if (args[0] == '-a')
+			args.shift
+			append = true
+		end
+
 		# Determine which data store we're operating on
 		if (active_module and global == false)
 			datastore = active_module.datastore
@@ -1747,9 +1796,13 @@ class Core
 			return true
 		end
 
-		datastore[name] = value
+		if append
+			datastore[name] = datastore[name] + value
+		else
+			datastore[name] = value
+		end
 
-		print_line("#{name} => #{value}")
+		print_line("#{name} => #{datastore[name]}")
 	end
 
 	#
@@ -2265,7 +2318,7 @@ class Core
 	# Returns the revision of the framework and console library
 	#
 	def cmd_version(*args)
-		svn_console_version = "$Revision: 14065 $"
+		svn_console_version = "$Revision: 15168 $"
 		svn_metasploit_version = Msf::Framework::Revision.match(/ (.+?) \$/)[1] rescue nil
 		if svn_metasploit_version
 			print_line("Framework: #{Msf::Framework::Version}.#{svn_metasploit_version}")
@@ -2324,7 +2377,7 @@ class Core
 		end
 
 		# Well-known option names specific to post-exploitation
-		if (mod.post?)
+		if (mod.post? or mod.exploit?)
 			return option_values_sessions() if opt.upcase == 'SESSION'
 		end
 
@@ -2361,7 +2414,12 @@ class Core
 							res << addr
 						end
 					when 'LHOST'
-						res << Rex::Socket.source_address()
+						rh = self.active_module.datastore["RHOST"]
+						if rh and not rh.empty?
+							res << Rex::Socket.source_address(rh)
+						else
+							res << Rex::Socket.source_address()
+						end
 					else
 				end
 

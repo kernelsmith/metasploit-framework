@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 
@@ -20,7 +20,7 @@ module Metasploit3
 
 	def initialize(info = {})
 		super(merge_info(info,
-			'Name'          => 'OSX iPhone Vibrate',
+			'Name'          => 'OS X iPhone Vibrate',
 			'Version'       => '$Revision$',
 			'Description'   => %q|
 				Causes the iPhone to vibrate, only works when the AudioToolkit library has been loaded.

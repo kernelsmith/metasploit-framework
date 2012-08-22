@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 require 'msf/core'
@@ -28,7 +28,7 @@ class Metasploit3 < Msf::Post
 			'Platform'      => [ 'windows' ],
 			'SessionTypes'  => [ 'meterpreter' ],
 			'References'    => [
-				[ 'URL', 'http://www.secmaniac.com/december-2010/bypass-windows-uac/' ]
+				[ 'URL', ' http://www.trustedsec.com/december-2010/bypass-windows-uac/' ]
 			],
 			'DisclosureDate'=> "Dec 31, 2010"
 		))
@@ -148,4 +148,3 @@ class Metasploit3 < Msf::Post
 
 
 end
-

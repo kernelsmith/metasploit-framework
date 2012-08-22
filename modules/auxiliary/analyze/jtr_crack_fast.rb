@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 #
 ##
 
@@ -135,6 +135,7 @@ class Metasploit3 < Msf::Auxiliary
 					cred_find = smb_hashes.select{|x| x[:id] == cid}
 					next if cred_find.length == 0
 					cred = cred_find.first
+					next if cred.user.to_s.strip.length == 0
 
 					print_good("Cracked: #{cred.user}:#{v} (#{cred.service.host.address}:#{cred.service.port})")
 					report_auth_info(
@@ -160,4 +161,3 @@ class Metasploit3 < Msf::Auxiliary
 		end
 	end
 end
-

@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 require 'msf/core'
@@ -23,7 +23,7 @@ module Metasploit3
 
 	def initialize(info = {})
 		super(merge_info(info,
-			'Name'          => 'PHP Command Shell, Bind TCP (via php)',
+			'Name'          => 'PHP Command Shell, Bind TCP (via PHP)',
 			'Version'       => '$Revision$',
 			'Description'   => 'Listen for a connection and spawn a command shell via php',
 			'Author'        => ['egypt', 'diaul <diaul@devilopers.org>',],

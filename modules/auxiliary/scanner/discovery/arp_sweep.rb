@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 require 'msf/core'
@@ -16,6 +16,8 @@ class Metasploit3 < Msf::Auxiliary
 	include Msf::Exploit::Remote::Capture
 	include Msf::Auxiliary::Report
 	include Msf::Auxiliary::Scanner
+
+	OUI_LIST = Rex::Oui
 
 	def initialize
 		super(
@@ -69,8 +71,10 @@ class Metasploit3 < Msf::Auxiliary
 
 				while(reply = getreply())
 					next unless reply.is_arp?
-					print_status("#{reply.arp_saddr_ip} appears to be up.")
+					company = OUI_LIST::lookup_oui_company_name(reply.arp_saddr_mac)
+					print_status("#{reply.arp_saddr_ip} appears to be up (#{company}).")
 					report_host(:host => reply.arp_saddr_ip, :mac=>reply.arp_saddr_mac)
+					report_note(:host  => reply.arp_saddr_ip, :type  => "mac_oui", :data  => company)
 				end
 
 			end
@@ -80,8 +84,10 @@ class Metasploit3 < Msf::Auxiliary
 		while (Time.now.to_f < etime)
 			while(reply = getreply())
 				next unless reply.is_arp?
-				print_status("#{reply.arp_saddr_ip} appears to be up.")
+				company = OUI_LIST::lookup_oui_company_name(reply.arp_saddr_mac)
+				print_status("#{reply.arp_saddr_ip} appears to be up (#{company}).")
 				report_host(:host => reply.arp_saddr_ip, :mac=>reply.arp_saddr_mac)
+				report_note(:host  => reply.arp_saddr_ip, :type  => "mac_oui", :data  => company)
 			end
 			Kernel.select(nil, nil, nil, 0.50)
 		end

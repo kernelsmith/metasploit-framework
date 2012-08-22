@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 
@@ -35,6 +35,15 @@ class Metasploit3 < Msf::Auxiliary
 			], self.class)
 	end
 
+	def auxiliary_commands
+		{ "select" => "Run a select query (a LIMIT clause is probably a really good idea)" }
+	end
+
+	def cmd_select(*args)
+		datastore["SQL"] = "select #{args.join(" ")}"
+		run
+	end
+
 	def run
 		return if not mysql_login_datastore
 		print_status("Sending statement: '#{datastore['SQL']}'...")
@@ -45,4 +54,3 @@ class Metasploit3 < Msf::Auxiliary
 	end
 
 end
-

@@ -1,12 +1,11 @@
-##
 # $Id$
 ##
 
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 
@@ -73,12 +72,12 @@ class Metasploit3 < Msf::Auxiliary
 
 	def get_pkt
 		buf = sock.get
-		print_status("[in ] #{buf.inspect}") if datastore['VERBOSE']
+		vprint_status("[in ] #{buf.inspect}")
 		buf
 	end
 
 	def send_pkt(pkt, get_resp = false)
-		print_status("[out] #{pkt.inspect}") if datastore['VERBOSE']
+		vprint_status("[out] #{pkt.inspect}")
 		sock.put(pkt)
 		get_pkt if get_resp
 	end
@@ -167,7 +166,7 @@ class Metasploit3 < Msf::Auxiliary
 			@evilchars = ['']
 		end
 
-		print_status("Connecting to host " + ip + " on port " + datastore['RPORT'])
+		print_status("Connecting to host " + ip + " on port " + datastore['RPORT'].to_s)
 
 		if (startstage == 1)
 			process_phase(1, "Fuzzing without command")

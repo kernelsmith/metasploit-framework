@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 
@@ -36,7 +36,7 @@ class Metasploit3 < Msf::Auxiliary
 					[ 'OSVDB', '5798' ],
 					[ 'BID', '10224' ],
 					#[ 'CVE', '' ],# No CVE!
-					[ 'URL', 'http://www.milw0rm.com/exploits/294' ],
+					[ 'EDB', '294' ]
 				],
 			'DisclosureDate' => 'Apr 27 2004'))
 
@@ -58,4 +58,3 @@ class Metasploit3 < Msf::Auxiliary
 	end
 
 end
-

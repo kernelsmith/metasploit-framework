@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 require 'msf/core'
@@ -29,7 +29,7 @@ module Metasploit3
 
 	def initialize(info = {})
 		super(update_info(info,
-			'Name'          => 'Mac OS X x86 iSight photo capture',
+			'Name'          => 'Mac OS X x86 iSight Photo Capture',
 			'Version'       => '$Revision$',
 			'Description'   => 'Inject a Mach-O bundle to capture a photo from the iSight (staged)',
 			'Author'        => 'ddz',
@@ -70,7 +70,7 @@ module Metasploit3
 		end
 
 		# Extract the host and port
-		host,port = session.tunnel_peer.split(':')
+		host = session.session_host
 
 		# Create a directory for the images
 		base = File.join(Msf::Config.config_directory, 'logs', 'isight')
@@ -96,4 +96,3 @@ module Metasploit3
 	end
 
 end
-

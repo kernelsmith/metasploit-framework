@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 ##
@@ -97,14 +97,14 @@ class Metasploit3 < Msf::Auxiliary
 					'Accept-Charset' => 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
 					'Keep-Alive' => '300',
 					'Connection' => 'keep-alive',
-					'Referer' => proto + datastore['RHOST'] + ":" + datastore['RPORT'],
+					'Referer' => proto + datastore['RHOST'] + ":" + datastore['RPORT'].to_s,
 					'Content-Type' => 'application/x-www-form-urlencoded',
 				}
 			}
 		@get_data_headers = {
 				'Host' => host,
 				'User-Agent' => useragent,
-				'Referer' => proto + datastore['RHOST'] + ":" + datastore['RPORT'],
+				'Referer' => proto + datastore['RHOST'] + ":" + datastore['RPORT'].to_s,
 			}
 	end
 

@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 require 'rex/proto/http'
@@ -64,8 +64,9 @@ class Metasploit3 < Msf::Auxiliary
 						:host	=> rhost,
 						:port	=> rport,
 						:proto  => 'tcp',
-						:name	=> self.fullname,
-						:info	=> "http://#{rhost}:#{rport}/level/#{level}/exec/show/version/CR",
+						:name	=> self.name,
+						:sname  => ssl ? "https" : "http",
+						:info	=> "Module #{self.fullname} successfully accessed http://#{rhost}:#{rport}/level/#{level}/exec/show/version/CR",
 						:refs   => self.references,
 						:exploited_at => Time.now.utc
 					}
@@ -83,8 +84,10 @@ class Metasploit3 < Msf::Auxiliary
 					report_exploit(
 						{
 							:host		=> rhost,
-							:service	=> rport,
-							:name		=> self.fullname
+							:port		=> rport,
+							:name		=> self.name,
+							:sname      => ssl ? "https" : "http",
+							:info       => "Module #{self.fullname} successfully captured the configuration file:\n#{config}"
 						}
 					)
 				else
@@ -97,4 +100,3 @@ class Metasploit3 < Msf::Auxiliary
 	end
 
 end
-

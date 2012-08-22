@@ -5,8 +5,8 @@
 ##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
-# Framework web site for more information on licensing and terms of use.
-# http://metasploit.com/framework/
+# web site for more information on licensing and terms of use.
+#   http://metasploit.com/
 ##
 
 require 'msf/core'
@@ -42,7 +42,7 @@ class Metasploit3 < Msf::Auxiliary
 		register_options(
 			[
 				Opt::RPORT(4848),
-				OptString.new('URI', [true, 'The URI path of the GlassFish Server', '/']),
+				OptString.new('TARGETURI', [true, 'The URI path of the GlassFish Server', '/']),
 				OptString.new('USERNAME',[true, 'A specific username to authenticate as','admin']),
 			], self.class)
 	end
@@ -53,7 +53,7 @@ class Metasploit3 < Msf::Auxiliary
 	#
 	def get_version(res)
 		#Extract banner from response
-		banner = res.headers['Server']
+		banner = res.headers['Server'] || ''
 
 		#Default value for edition and glassfish version
 		edition = 'Commercial'
@@ -84,7 +84,7 @@ class Metasploit3 < Msf::Auxiliary
 		report_auth_info(
 			:host   => rhost,
 			:port   => rport,
-			:sname  => 'http',
+			:sname => (ssl ? 'https' : 'http'),
 			:user   => user,
 			:pass   => pass,
 			:proof  => "WEBAPP=\"GlassFish\", VHOST=#{vhost}",
@@ -104,7 +104,7 @@ class Metasploit3 < Msf::Auxiliary
 		headers['Content-Length'] = data.length if data != nil
 
 		res = send_request_raw({
-			'uri'	  => path,
+			'uri'	  => "#{target_uri.path}#{path}".gsub(/\/\//, '/'),
 			'method'  => method,
 			'data'	  => data,
 			'headers' => headers,
@@ -151,7 +151,7 @@ class Metasploit3 < Msf::Auxiliary
 			report_auth_info(
 				:host	=> rhost,
 				:port	=> rport,
-				:sname	=> 'http',
+				:sname => (ssl ? 'https' : 'http'),
 				:user	=> '',
 				:pass	=> '',
 				:proof	=> "WEBAPP=\"GlassFish\", VHOST=#{vhost}",
