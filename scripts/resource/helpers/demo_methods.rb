@@ -17,15 +17,35 @@
 	#_.~*~._/^\_,-''-._.~*~._/^\_,-''-._.~*~._/^\_,-''-._.~*~._/^\_,-'
 
 	#
-	# Method for simple pause, press enter to continue, optional timeout +tout+
+	# Method for simple pause, press any key to continue, optional timeout +tout+
 	# optional +verbose+ for slightly more status information output
+	# the displayed message can be specified with +msg+
+	# use array of regular expression strings +continue_regexps+ to specify what
+	# keystrokes will release the pause and continue
 	#
-	def rc_pause(tout = 0, verbose = true)
+	def rc_pause(tout = 0, verbose = true, msg = nil, continue_regexps = ['.*'])
+		# tout of 0 means wait forever
+		# popular vals for continue_regexps
+		# ['.*']		=>  any key
+		# ['Y', 'y']	=>  Y or y
+		# ['Y|y']		=>  Y or y
 		require 'timeout'
-		print_good('PAUSED - enter to continue') if verbose
-		#gets
+		msg = 'PAUSED - any key to continue' unless msg
+		continue_words =  [continue_words] if continue_words.class = String
+		print_good(msg) if verbose
 		begin
-			Timeout::timeout(tout) {gets()}
+			Timeout::timeout(tout) do
+				freeme = true
+				while freeme
+					typed = gets()
+					continue_words.each do |re|
+						if typed.chomp =~ Regexp.new(re)
+							freeme = false 
+							break
+						end
+					end
+				end
+			end
 		rescue Timeout::Error
 			print_status "The pause timed out" if verbose
 		end
