@@ -1,6 +1,7 @@
 # -*- coding: binary -*-
 require 'rex/post/meterpreter'
 require 'rex/parser/arguments'
+require 'rex/ui/tab_complete'
 
 module Rex
 module Post
@@ -784,7 +785,7 @@ class Console::CommandDispatcher::Core
 	def cmd_resource_tabs(str, words)
 		return [] if words.length > 1
 
-		tab_complete_filenames(str, words)
+		Tabs::tab_complete_simple_filenames(Msf::Config.install_root,str, words)
 	end
 
 	def cmd_enable_unicode_encoding

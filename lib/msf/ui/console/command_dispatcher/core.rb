@@ -5,6 +5,7 @@ require 'msf/ui/console/command_dispatcher/nop'
 require 'msf/ui/console/command_dispatcher/payload'
 require 'msf/ui/console/command_dispatcher/auxiliary'
 require 'msf/ui/console/command_dispatcher/post'
+require 'rex/ui/tab_complete'
 
 module Msf
 module Ui
@@ -226,8 +227,8 @@ class Core
 		#return tabs if words.length > 1
 		if ( str and str =~ /^#{Regexp.escape(File::SEPARATOR)}/ )
 			# then you are probably specifying a full path so let's just use normal file completion
-			return tab_complete_filenames(str,words)
-		elsif (not words[1] or not words[1].match(/^\//))
+			return Rex::Ui::Tabs.tab_complete_simple_filenames(str, str, words)
+		elsif ( not words[1] or not words[1].match(/^\//) )
 			# then let's start tab completion in the scripts/resource directories
 			begin
 				[
@@ -244,7 +245,7 @@ class Core
 			rescue Exception
 			end
 		else
-			tabs += tab_complete_filenames(str,words)
+			tabs += Rex::Ui::Tabs.tab_complete_simple_filenames(Msf::Config.install_root,str, words)
 		end
 		return tabs
 	end
