@@ -790,7 +790,7 @@ class Console::CommandDispatcher::Core
 	def cmd_resource_tabs(str, words)
 		tabs = []
 		begin
-			return Rex::Ui::Tabs::tab_complete_simple_filenames(str, words, @resource_tab_completion_locations) || []
+			return tab_complete_filenames(str, words, @resource_tab_completion_locations) || []
 		rescue Exception
 		end
 	end

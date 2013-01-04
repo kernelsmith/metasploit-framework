@@ -228,7 +228,7 @@ class Core
 		#print_status "str is --#{str}-- and words are --#{words.inspect}--"
 		#print_status "locations are --#{@resource_tab_completion_locations.inspect}"
 		begin
-			return Rex::Ui::Tabs::tab_complete_simple_filenames(str, words, @resource_tab_completion_locations) || []
+			return tab_complete_filenames(str, words, @resource_tab_completion_locations) || []
 		rescue Exception
 		end
 	end
