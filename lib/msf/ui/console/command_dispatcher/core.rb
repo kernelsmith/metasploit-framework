@@ -227,15 +227,10 @@ class Core
 	def cmd_resource_tabs(str, words)
 		#print_status "str is --#{str}-- and words are --#{words.inspect}--"
 		#print_status "locations are --#{@resource_tab_completion_locations.inspect}"
-		tabs = []
 		begin
-			@resource_tab_completion_locations.each do |dir|
-				next if not ::File.exist? dir
-				tabs += ::Rex::Ui::Tabs::tab_complete_simple_filenames(str, words, dir)
-			end
+			return Rex::Ui::Tabs::tab_complete_simple_filenames(str, words, @resource_tab_completion_locations) || []
 		rescue Exception
 		end
-		return tabs
 	end
 
 	def cmd_makerc_help

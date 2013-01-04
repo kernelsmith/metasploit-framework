@@ -28,6 +28,11 @@ class Console::CommandDispatcher::Core
 		self.extensions = []
 		self.bgjobs     = []
 		self.bgjob_id   = 0
+		@resource_tab_completion_locations = [
+			::Msf::Config.script_directory + File::SEPARATOR + "resource",
+			::Msf::Config.user_script_directory + File::SEPARATOR + "resource",
+			"."
+		]
 
 	end
 
@@ -783,21 +788,11 @@ class Console::CommandDispatcher::Core
 	end
 
 	def cmd_resource_tabs(str, words)
-		#return [] if words.length > 1
 		tabs = []
 		begin
-			places_to_look = [
-				::Msf::Config.script_directory + File::SEPARATOR + "resource",
-				::Msf::Config.user_script_directory + File::SEPARATOR + "resource",
-				"."
-			]
-			places_to_look.each do |dir|
-				next if not ::File.exist? dir
-				tabs += Rex::Ui::Tabs::tab_complete_simple_filenames(str, words, dir)
-			end
+			return Rex::Ui::Tabs::tab_complete_simple_filenames(str, words, @resource_tab_completion_locations) || []
 		rescue Exception
 		end
-		return tabs
 	end
 
 	def cmd_enable_unicode_encoding

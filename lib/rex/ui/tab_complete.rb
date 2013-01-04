@@ -2,18 +2,30 @@ module Rex
 module Ui
 module Tabs
 
-def tab_complete_simple_filenames(str, words, starting_location=nil, &block)
-	# caller can pass nil for starting_location if default behavior of tab_complete_filenames
+#
+# get tab completed filenames given +str+ as the word currently being typed and +words+ array
+# containing the previously completed words as determined by Shellwords.
+# Optionally, an array of +starting_locations+ may be given to set tab completion starting
+# points and if +&block+ is given, only filenames which return true for the block will be
+# returned
+#
+
+def tab_complete_simple_filenames(str, words, starting_locations=nil, &block)
+	# caller can pass nil for starting_locations if default behavior of tab_complete_filenames
 	# is desired, which uses ::Readline::FILENAME_COMPLETION_PROC
 	# TODO: allow them to pass stuff like "install_root" and automatically try to prepend Msf::Config?
 	tabs = []
-	if not starting_location
+	if not starting_locations
 		tabs = tab_complete_filenames(str, words)
 	else
-		tabs = tab_complete_filenames(::File.join(starting_location,str),words)
+		# in case we get a string instead of an Array
+		starting_locations = ["#{starting_locations}"] if starting_locations.class = String
+		starting_locations.each do |path|
+			tabs << tab_complete_filenames(::File.join(path,str),words)
+		end
 	end
 	if block_given?
-		return tabs.each(&block)
+		return tabs.select(&block)
 	else
 		return tabs
 	end
