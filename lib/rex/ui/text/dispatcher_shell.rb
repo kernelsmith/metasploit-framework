@@ -248,7 +248,7 @@ module DispatcherShell
 				tabs = _tab_complete_filenames(str, words)
 			else
 				# in case we get a string instead of an Array
-				starting_locations = ["#{starting_locations}"] if starting_locations.class = String
+				starting_locations = ["#{starting_locations}"] if starting_locations.class == String
 				starting_locations.each do |path|
 					tabs << _tab_complete_filenames(::File.join(path,str),words)
 				end
