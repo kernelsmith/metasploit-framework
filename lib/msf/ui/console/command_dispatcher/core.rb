@@ -125,6 +125,11 @@ class Core
 		@cache_payloads = nil
 		@previous_module = nil
 		@module_name_stack = []
+		@resource_tab_completion_locations = [
+			::Msf::Config.script_directory + File::SEPARATOR + "resource",
+			::Msf::Config.user_script_directory + File::SEPARATOR + "resource",
+			"."
+		]
 	end
 
 	#
@@ -199,10 +204,7 @@ class Core
 				good_res = res
 			elsif
 				# let's check to see if it's in the scripts/resource dir (like when tab completed)
-				[
-					::Msf::Config.script_directory + File::SEPARATOR + "resource",
-					::Msf::Config.user_script_directory + File::SEPARATOR + "resource"
-				].each do |dir|
+				@resource_tab_completion_locations.each do |dir|
 					res_path = dir + File::SEPARATOR + res
 					if (File.file?(res_path) and File.readable?(res_path))
 						good_res = res_path
@@ -223,29 +225,15 @@ class Core
 	# Tab completion for the resource command
 	#
 	def cmd_resource_tabs(str, words)
+		#print_status "str is --#{str}-- and words are --#{words.inspect}--"
+		#print_status "locations are --#{@resource_tab_completion_locations.inspect}"
 		tabs = []
-		#return tabs if words.length > 1
-		if ( str and str =~ /^#{Regexp.escape(File::SEPARATOR)}/ )
-			# then you are probably specifying a full path so let's just use normal file completion
-			return Rex::Ui::Tabs.tab_complete_simple_filenames(str, str, words)
-		elsif ( not words[1] or not words[1].match(/^\//) )
-			# then let's start tab completion in the scripts/resource directories
-			begin
-				[
-					::Msf::Config.script_directory + File::SEPARATOR + "resource",
-					::Msf::Config.user_script_directory + File::SEPARATOR + "resource",
-					"."
-				].each do |dir|
-					next if not ::File.exist? dir
-					tabs += ::Dir.new(dir).find_all { |e|
-						path = dir + File::SEPARATOR + e
-						::File.file?(path) and File.readable?(path)
-					}
-				end
-			rescue Exception
+		begin
+			@resource_tab_completion_locations.each do |dir|
+				next if not ::File.exist? dir
+				tabs += ::Rex::Ui::Tabs::tab_complete_simple_filenames(str, words, dir)
 			end
-		else
-			tabs += Rex::Ui::Tabs.tab_complete_simple_filenames(Msf::Config.install_root,str, words)
+		rescue Exception
 		end
 		return tabs
 	end

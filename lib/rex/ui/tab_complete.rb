@@ -2,7 +2,7 @@ module Rex
 module Ui
 module Tabs
 
-def tab_complete_simple_filenames(starting_location, str, words, &block)
+def tab_complete_simple_filenames(str, words, starting_location=nil, &block)
 	# caller can pass nil for starting_location if default behavior of tab_complete_filenames
 	# is desired, which uses ::Readline::FILENAME_COMPLETION_PROC
 	# TODO: allow them to pass stuff like "install_root" and automatically try to prepend Msf::Config?
@@ -12,32 +12,36 @@ def tab_complete_simple_filenames(starting_location, str, words, &block)
 	else
 		tabs = tab_complete_filenames(::File.join(starting_location,str),words)
 	end
-	if block_passed?
+	if block_given?
 		return tabs.each(&block)
 	else
 		return tabs
 	end
 end
 
-def tab_complete_simple_args(str, words, &block)
-	tabs = []
-	# get the command's arguments as an array and apply the block
-	return tabs.each(&block)
-end
+# def find_tab_completed_file
+#    for when you are trying to find a file to read that was tab completed
+# end
 
-def tab_complete_by_words_length(str, words, arr_of_procs)
-	# TODO:  validate args
-	# call the proc at words.length unless it doesn't exist
-	# if there's nothing at words.length, call the last proc in the array
-	# e.g., if there is one word in words, call the proc at arr_of_procs[1]
-	# but if there are 4 words in words and only procs at 0,1,2, and 5 then
-	# the proc at arr_of_procs[5] is called
-	if arr_of_procs[words.length]
-		return arr_of_procs[words.length].call(str,words)
-	else
-		return arr_of_procs.last.call(str,words)
-	end
-end
+# def tab_complete_simple_args(str, words, &block)
+# 	tabs = []
+# 	# get the command's arguments as an array and apply the block
+# 	return tabs.each(&block)
+# end
+
+# def tab_complete_by_words_length(str, words, arr_of_procs)
+# 	# TODO:  validate args
+# 	# call the proc at words.length unless it doesn't exist
+# 	# if there's nothing at words.length, call the last proc in the array
+# 	# e.g., if there is one word in words, call the proc at arr_of_procs[1]
+# 	# but if there are 4 words in words and only procs at 0,1,2, and 5 then
+# 	# the proc at arr_of_procs[5] is called
+# 	if arr_of_procs[words.length]
+# 		return arr_of_procs[words.length].call(str,words)
+# 	else
+# 		return arr_of_procs.last.call(str,words)
+# 	end
+# end
 
 private
 #

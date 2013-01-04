@@ -783,9 +783,21 @@ class Console::CommandDispatcher::Core
 	end
 
 	def cmd_resource_tabs(str, words)
-		return [] if words.length > 1
-
-		Tabs::tab_complete_simple_filenames(Msf::Config.install_root,str, words)
+		#return [] if words.length > 1
+		tabs = []
+		begin
+			places_to_look = [
+				::Msf::Config.script_directory + File::SEPARATOR + "resource",
+				::Msf::Config.user_script_directory + File::SEPARATOR + "resource",
+				"."
+			]
+			places_to_look.each do |dir|
+				next if not ::File.exist? dir
+				tabs += Rex::Ui::Tabs::tab_complete_simple_filenames(str, words, dir)
+			end
+		rescue Exception
+		end
+		return tabs
 	end
 
 	def cmd_enable_unicode_encoding
