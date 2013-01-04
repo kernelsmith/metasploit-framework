@@ -1,7 +1,6 @@
 # -*- coding: binary -*-
 require 'rex/post/meterpreter'
 require 'rex/parser/arguments'
-require 'rex/ui/tab_complete'
 
 module Rex
 module Post

@@ -5,7 +5,6 @@ require 'msf/ui/console/command_dispatcher/nop'
 require 'msf/ui/console/command_dispatcher/payload'
 require 'msf/ui/console/command_dispatcher/auxiliary'
 require 'msf/ui/console/command_dispatcher/post'
-require 'rex/ui/tab_complete'
 
 module Msf
 module Ui
