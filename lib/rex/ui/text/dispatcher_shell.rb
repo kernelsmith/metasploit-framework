@@ -239,25 +239,51 @@ module DispatcherShell
 		# returned
 		#
 
-		def tab_complete_filenames(str, words, starting_locations=nil, &block)
+		def tab_complete_filenames_at(str, words, starting_locations=nil, &block)
 			# caller can pass nil for starting_locations if default behavior of tab_complete_filenames
 			# is desired, which uses ::Readline::FILENAME_COMPLETION_PROC
 			# TODO: allow them to pass stuff like "install_root" and automatically try to prepend Msf::Config?
 			tabs = []
-			if not starting_locations
-				tabs = _tab_complete_filenames(str, words)
-			else
+			if not starting_locations or words[1] =~ (/^#{::File::SEPARATOR}/) # then just pass on to the generic
+				tabs = tab_complete_filenames(str, words)
+			else # then let's start tab completion in the provided directories
 				# in case we get a string instead of an Array
 				starting_locations = ["#{starting_locations}"] if starting_locations.class == String
-				starting_locations.each do |path|
-					tabs << _tab_complete_filenames(::File.join(path,str),words)
+				begin
+					starting_locations.each do |dir|
+						#print_status "Checking the dir:#{dir}"
+						next if not ::File.directory? dir
+						tabs += ::Dir.new(dir).find_all { |e|
+							path = dir + File::SEPARATOR + e
+							::File.file?(path) and File.readable?(path)
+						}
+					end
+				rescue Exception => e
+					print_error "This error is normally eaten #{e.to_s}"
 				end
 			end
+
 			if block_given?
-				return tabs.select(&block)
+				return tabs.select(&block) # no select! available in 1.8.x
 			else
 				return tabs
 			end
+			#return tabs.map{|e| e.sub(/.rb/, '')}
+		end
+		#
+		# Provide a generic tab completion for file names.
+		#
+		# If the only completion is a directory, this descends into that directory
+		# and continues completions with filenames contained within.
+		#
+		def tab_complete_filenames(str, words)
+			matches = ::Readline::FILENAME_COMPLETION_PROC.call(str)
+			if matches and matches.length == 1 and File.directory?(matches[0])
+				dir = matches[0]
+				dir += File::SEPARATOR if dir[-1,1] != File::SEPARATOR
+				matches = ::Readline::FILENAME_COMPLETION_PROC.call(dir)
+			end
+			matches
 		end
 
 		# def find_tab_completed_file
@@ -287,21 +313,7 @@ module DispatcherShell
 		##################
 
 		protected
-		#
-		# Provide a generic tab completion for file names.
-		#
-		# If the only completion is a directory, this descends into that directory
-		# and continues completions with filenames contained within.
-		#
-		def _tab_complete_filenames(str, words)
-			matches = ::Readline::FILENAME_COMPLETION_PROC.call(str)
-			if matches and matches.length == 1 and File.directory?(matches[0])
-				dir = matches[0]
-				dir += File::SEPARATOR if dir[-1,1] != File::SEPARATOR
-				matches = ::Readline::FILENAME_COMPLETION_PROC.call(dir)
-			end
-			matches
-		end
+
 	end
 
 	#

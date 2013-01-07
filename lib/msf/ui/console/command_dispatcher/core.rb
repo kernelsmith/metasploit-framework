@@ -124,11 +124,17 @@ class Core
 		@cache_payloads = nil
 		@previous_module = nil
 		@module_name_stack = []
+		#@loadpath_tab_completion_locations = []
+		@load_tab_completion_locations = [
+					Msf::Config.user_plugin_directory,
+					Msf::Config.plugin_directory
+		]
 		@resource_tab_completion_locations = [
 			::Msf::Config.script_directory + File::SEPARATOR + "resource",
 			::Msf::Config.user_script_directory + File::SEPARATOR + "resource",
 			"."
 		]
+		#@use_tab_completion_locations = [] ??
 	end
 
 	#
@@ -203,7 +209,7 @@ class Core
 				good_res = res
 			elsif
 				# let's check to see if it's in the scripts/resource dir (like when tab completed)
-				@resource_tab_completion_locations.each do |dir|
+				@resource_tab_completion_locations.select {|d| File.directory?(d)}.each do |dir|
 					res_path = dir + File::SEPARATOR + res
 					if (File.file?(res_path) and File.readable?(res_path))
 						good_res = res_path
@@ -225,11 +231,8 @@ class Core
 	#
 	def cmd_resource_tabs(str, words)
 		#print_status "str is --#{str}-- and words are --#{words.inspect}--"
-		#print_status "locations are --#{@resource_tab_completion_locations.inspect}"
-		begin
-			return tab_complete_filenames(str, words, @resource_tab_completion_locations) || []
-		rescue Exception
-		end
+		#print_status "requesting tab comp in:#{@resource_tab_completion_locations.select {|d| File.directory?(d)}.inspect}"
+		return tab_complete_filenames_at(str, words, @resource_tab_completion_locations) || []
 	end
 
 	def cmd_makerc_help
@@ -309,6 +312,12 @@ class Core
 		rescue ::Exception
 			print_error("The specified path does not exist")
 		end
+	end
+
+	# TODO:  Finish this
+	def cmd_cd_tabs(str,words)
+		return if words.length > 1
+		return tab_complete_filenames(str,words)
 	end
 
 	def cmd_banner_help
@@ -958,28 +967,8 @@ class Core
 	# Tab completion for the load command
 	#
 	def cmd_load_tabs(str, words)
-		tabs = []
-
-		if (not words[1] or not words[1].match(/^\//))
-			# then let's start tab completion in the scripts/resource directories
-			begin
-				[
-					Msf::Config.user_plugin_directory,
-					Msf::Config.plugin_directory
-				].each do |dir|
-					next if not ::File.exist? dir
-					tabs += ::Dir.new(dir).find_all { |e|
-						path = dir + File::SEPARATOR + e
-						::File.file?(path) and File.readable?(path)
-					}
-				end
-			rescue Exception
-			end
-		else
-			tabs += tab_complete_filenames(str,words)
-		end
-		return tabs.map{|e| e.sub(/.rb/, '')}
-
+		tabs = tab_complete_filenames_at(str,words,@load_tab_completion_locations) || []
+		return tabs.map{|e| e.sub(/.rb/, '')} # remove the .rb
 	end
 
 	def cmd_route_help

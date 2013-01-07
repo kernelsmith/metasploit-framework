@@ -787,11 +787,9 @@ class Console::CommandDispatcher::Core
 	end
 
 	def cmd_resource_tabs(str, words)
-		tabs = []
-		begin
-			return tab_complete_filenames(str, words, @resource_tab_completion_locations) || []
-		rescue Exception
-		end
+		#print_status "str is --#{str}-- and words are --#{words.inspect}--"
+		#print_status "requesting tab comp in:#{@resource_tab_completion_locations.select {|d| File.directory?(d)}.inspect}"
+		return tab_complete_filenames_at(str, words, @resource_tab_completion_locations) || []
 	end
 
 	def cmd_enable_unicode_encoding
