@@ -268,8 +268,8 @@ module DispatcherShell
 			else
 				return tabs
 			end
-			#return tabs.map{|e| e.sub(/.rb/, '')}
 		end
+
 		#
 		# Provide a generic tab completion for file names.
 		#
@@ -286,6 +286,36 @@ module DispatcherShell
 			matches
 		end
 
+		def tab_complete_filenames_no_readline(str, words)
+			paths = []
+			if (File.directory?(str))
+				paths = Dir.entries(str)
+				paths = paths.map { |f|
+					if File.directory? File.join(str,f)
+						File.join(str,f)
+					end
+				}
+				paths.delete_if { |f| f.nil? or File.basename(f) == '.' or File.basename(f) == '..' }
+			else
+				d = Dir.glob(str + "*").map { |f| f if File.directory?(f) }
+				d.delete_if { |f| f.nil? or f == '.' or f == '..' }
+				# If there's only one possibility, descend to the next level
+				if (1 == d.length)
+					paths = Dir.entries(d[0])
+					paths = paths.map { |f|
+						if File.directory? File.join(d[0],f)
+							File.join(d[0],f)
+						end
+					}
+					paths.delete_if { |f| f.nil? or File.basename(f) == '.' or File.basename(f) == '..' }
+				else
+					paths = d
+				end
+			end
+			paths.sort!
+			return paths
+		end
+
 		# def find_tab_completed_file
 		#    for when you are trying to find a file to read that was tab completed
 		# end
@@ -296,19 +326,25 @@ module DispatcherShell
 		# 	return tabs.each(&block)
 		# end
 
-		# def tab_complete_by_words_length(str, words, arr_of_procs)
-		# 	# TODO:  validate args
-		# 	# call the proc at words.length unless it doesn't exist
-		# 	# if there's nothing at words.length, call the last proc in the array
-		# 	# e.g., if there is one word in words, call the proc at arr_of_procs[1]
-		# 	# but if there are 4 words in words and only procs at 0,1,2, and 5 then
-		# 	# the proc at arr_of_procs[5] is called
-		# 	if arr_of_procs[words.length]
-		# 		return arr_of_procs[words.length].call(str,words)
-		# 	else
-		# 		return arr_of_procs.last.call(str,words)
-		# 	end
-		# end
+		#
+		# do something different depending on words.length.  the proc or lambda in
+		# +arr_of_procs+ at index of +words.length+ is called and it's return val is
+		# returned.  +str+ and +words+ are passed to the proc/lambda for use if desired
+		# if words.length exceeds the index of arra_of_procs then arr_of_procs.last is called
+		#
+		def tab_complete_by_words_length(str, words, arr_of_procs)
+			# TODO:  validate args
+			# call the proc at words.length unless it doesn't exist
+			# if there's nothing at words.length, call the last proc in the array
+			# e.g., if there is one word in words, call the proc at arr_of_procs[1]
+			# but if there are 4 words in words and only procs at 0,1,2, and 5 then
+			# the proc at arr_of_procs[5] is called
+			if arr_of_procs[words.length]
+				return arr_of_procs[words.length].call(str,words)
+			else
+				return arr_of_procs.last.call(str,words)
+			end
+		end
 
 		##################
 
@@ -414,6 +450,18 @@ module DispatcherShell
 		}
 	end
 
+	#
+	# get an array of all commands from all currently loaded dispatchers
+	#
+	def get_all_commands
+		items = []
+		dispatcher_stack.each do |dispatcher|
+			next unless dispatcher.respond_to?(:commands)
+			next if (dispatcher.commands.nil? or dispatcher.commands.length == 0)
+			items << dispatcher.commands.keys
+		end
+		return items
+	end
 	#
 	# Provide command-specific tab completion
 	#

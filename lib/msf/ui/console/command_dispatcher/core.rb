@@ -124,11 +124,12 @@ class Core
 		@cache_payloads = nil
 		@previous_module = nil
 		@module_name_stack = []
-		#@loadpath_tab_completion_locations = []
+
 		@load_tab_completion_locations = [
-					Msf::Config.user_plugin_directory,
-					Msf::Config.plugin_directory
+			::Msf::Config.user_plugin_directory,
+			::Msf::Config.plugin_directory
 		]
+		#@loadpath_tab_completion_locations = []
 		@resource_tab_completion_locations = [
 			::Msf::Config.script_directory + File::SEPARATOR + "resource",
 			::Msf::Config.user_script_directory + File::SEPARATOR + "resource",
@@ -138,12 +139,15 @@ class Core
 	end
 
 	#
-	# Returns the name of the command dispatcher.
+	# @return [String] Returns the name of the command dispatcher.
 	#
 	def name
 		"Core"
 	end
 
+	#
+	# @return [void] Prints help information for the color command
+	#
 	def cmd_color_help
 		print_line "Usage: color <'true'|'false'|'auto'>"
 		print_line
@@ -151,6 +155,10 @@ class Core
 		print_line
 	end
 
+	#
+	# @param args [Array] Enables, or disables shell coloring, must be `auto`, `true`, or `false`
+	# @return [void]
+	#
 	def cmd_color(*args)
 		case args[0]
 		when "auto"
@@ -166,6 +174,9 @@ class Core
 		driver.update_prompt
 	end
 
+	#
+	# @return [void] Prints help information for the reload_all command
+	#
 	def cmd_reload_all_help
 		print_line "Usage: reload_all"
 		print_line
@@ -175,7 +186,7 @@ class Core
 	end
 
 	#
-	# Reload all module paths that we are aware of
+	# @return [void] Reload all the modules of which we are aware
 	#
 	def cmd_reload_all(*args)
 		if args.length > 0
@@ -187,6 +198,9 @@ class Core
 		cmd_banner()
 	end
 
+	#
+	# @return [void] Prints help information for the resource command
+	#
 	def cmd_resource_help
 		print_line "Usage: resource path1 [path2 ...]"
 		print_line
@@ -197,6 +211,10 @@ class Core
 		print_line
 	end
 
+	#
+	# @param args [Array] Executes a list of resource files
+	# @return [void]
+	#
 	def cmd_resource(*args)
 		if args.empty?
 			cmd_resource_help
@@ -227,7 +245,9 @@ class Core
 	end
 
 	#
-	# Tab completion for the resource command
+	# @param str [String] The partially typed word being completed
+	# @param words [Array] The array of already complete words on the command line preceding str
+	# @return [Array] Returns an array of possible tab completions for the resource command
 	#
 	def cmd_resource_tabs(str, words)
 		#print_status "str is --#{str}-- and words are --#{words.inspect}--"
@@ -235,6 +255,9 @@ class Core
 		return tab_complete_filenames_at(str, words, @resource_tab_completion_locations) || []
 	end
 
+	#
+	# @return [void] Prints help information for the makerc command
+	#
 	def cmd_makerc_help
 		print_line "Usage: makerc <output rc file>"
 		print_line
@@ -243,7 +266,8 @@ class Core
 	end
 
 	#
-	# Saves commands executed since the ui started to the specified msfrc file
+	# @param name [String] The name of the resource file to be created
+	# @return [void] Saves commands executed since the ui started to the specified resource file name
 	#
 	def cmd_makerc(*args)
 		if args.empty?
@@ -253,6 +277,9 @@ class Core
 		driver.save_recent_history(args[0])
 	end
 
+	#
+	# @return [void] Prints help information for the back command
+	#
 	def cmd_back_help
 		print_line "Usage: back"
 		print_line
@@ -261,8 +288,8 @@ class Core
 	end
 
 	#
-	# Pop the current dispatcher stack context, assuming it isn't pointed at
-	# the core or database backend stack context.
+	# @return [void] Pops (backs up) the current dispatcher stack context, assuming it isn't
+	#     pointed at the core or database backend stack context.
 	#
 	def cmd_back(*args)
 		if (driver.dispatcher_stack.size > 1 and
@@ -291,6 +318,9 @@ class Core
 		end
 	end
 
+	#
+	# @return [void] Prints help information for the cd command
+	#
 	def cmd_cd_help
 		print_line "Usage: cd <directory>"
 		print_line
@@ -299,7 +329,8 @@ class Core
 	end
 
 	#
-	# Change the current working directory
+	# @param dir [String] The directory to which to change
+	# @return [void] Changes the current working directory to the given dir
 	#
 	def cmd_cd(*args)
 		if(args.length == 0)
@@ -314,12 +345,19 @@ class Core
 		end
 	end
 
-	# TODO:  Finish this
+	#
+	# @param str [String] The partially typed word being completed
+	# @param words [Array] The array of already complete words on the command line preceding str
+	# @return [Array] Returns an array of possible tab completions for the cd command
+	#
 	def cmd_cd_tabs(str,words)
 		return if words.length > 1
 		return tab_complete_filenames(str,words)
 	end
 
+	#
+	# @return [void] Prints help information for the banner command
+	#
 	def cmd_banner_help
 		print_line "Usage: banner"
 		print_line
@@ -328,7 +366,7 @@ class Core
 	end
 
 	#
-	# Display one of the fabulous banners.
+	# @return [void] Displays one of the fabulous banners
 	#
 	def cmd_banner(*args)
 		banner  = "%cya" + Banner.to_s + "%clr\n\n"
@@ -375,6 +413,9 @@ class Core
 
 	end
 
+	#
+	# @return [Void] Prints help information for the connect command
+	#
 	def cmd_connect_help
 		print_line "Usage: connect [options] <host> <port>"
 		print_line
@@ -384,7 +425,8 @@ class Core
 	end
 
 	#
-	# Talk to a host
+	# @param args [Array] The various options followed by the host and the port
+	# @return [Boolean] Returns true upon successful connection to a host, otherwise false
 	#
 	def cmd_connect(*args)
 		if args.length < 2 or args.include?("-h")
@@ -563,7 +605,8 @@ class Core
 	end
 
 	#
-	# Instructs the driver to stop executing.
+	# @param args [Array] Accepts "-y" or "-Y" to force an exit even if active sessions are open
+	# @return [Void] Instructs the driver to stop executing.
 	#
 	def cmd_exit(*args)
 		forced = false
@@ -579,6 +622,9 @@ class Core
 
 	alias cmd_quit cmd_exit
 
+	#
+	# @return [Void] Prints help for the sleep command
+	#
 	def cmd_sleep_help
 		print_line "Usage: sleep <seconds>"
 		print_line
@@ -587,13 +633,17 @@ class Core
 	end
 
 	#
-	# Causes process to pause for the specified number of seconds
+	# @param duration [String] The duration in seconds to sleep.  Accepts a string representing a float.
+	# @return [Void] Do nothing the specified number of seconds.  This is useful in rc scripts.
 	#
 	def cmd_sleep(*args)
 		return if not (args and args.length == 1)
 		Rex::ThreadSafe.sleep(args[0].to_f)
 	end
 
+	#
+	# @return [Void] Prints help information for the info command
+	#
 	def cmd_info_help
 		print_line "Usage: info <module name> [mod2 mod3 ...]"
 		print_line
@@ -603,7 +653,9 @@ class Core
 	end
 
 	#
-	# Displays information about one or more module.
+	# @param modules [Array] Optional.  List of modules for which info is displayed, otherwise
+	#     information for the currently loaded module is displayed.
+	# @return [Void] Displays information about one or more modules.
 	#
 	def cmd_info(*args)
 		if (args.length == 0)
@@ -1228,38 +1280,11 @@ class Core
 	end
 
 	def cmd_loadpath_tabs(str, words)
-		return [] if words.length > 1
-
+		#return [] if words.length > 1  # removed because loadpath can take > 1 arg
 		# This custom completion might better than Readline's... We'll leave it for now.
 		#tab_complete_filenames(str,words)
 
-		paths = []
-		if (File.directory?(str))
-			paths = Dir.entries(str)
-			paths = paths.map { |f|
-				if File.directory? File.join(str,f)
-					File.join(str,f)
-				end
-			}
-			paths.delete_if { |f| f.nil? or File.basename(f) == '.' or File.basename(f) == '..' }
-		else
-			d = Dir.glob(str + "*").map { |f| f if File.directory?(f) }
-			d.delete_if { |f| f.nil? or f == '.' or f == '..' }
-			# If there's only one possibility, descend to the next level
-			if (1 == d.length)
-				paths = Dir.entries(d[0])
-				paths = paths.map { |f|
-					if File.directory? File.join(d[0],f)
-						File.join(d[0],f)
-					end
-				}
-				paths.delete_if { |f| f.nil? or File.basename(f) == '.' or File.basename(f) == '..' }
-			else
-				paths = d
-			end
-		end
-		paths.sort!
-		return paths
+		return tab_complete_filenames_no_readline(str, words) || []
 	end
 
 	def cmd_search_help
@@ -1670,7 +1695,9 @@ class Core
 			return framework.sessions.keys.map { |k| k.to_s }
 
 		when "-c"
-			# Can't really complete commands hehe
+			# TODO:  It would be better if we could fully tab complete each command too, but
+			# it requires nesting the str & words and makes rewriting the command a PITA
+			return driver.get_all_commands
 
 		when "-s"
 			# XXX: Complete scripts
@@ -2005,7 +2032,6 @@ class Core
 	#
 	def cmd_unload_tabs(str, words)
 		return [] if words.length > 1
-
 		tabs = []
 		framework.plugins.each { |k| tabs.push(k.name) }
 		return tabs

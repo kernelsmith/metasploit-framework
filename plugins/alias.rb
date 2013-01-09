@@ -263,12 +263,10 @@ class Plugin::Alias < Msf::Plugin
 				end
 			end
 
-			# gather all the current commands the driver's dispatcher's have & check 'em
+			# gather all the current commands the driver's dispatcher's have & check alias val against them
 			driver.dispatcher_stack.each do |dispatcher|
 				next unless dispatcher.respond_to?(:commands)
-				next if (dispatcher.commands.nil?)
-				next if (dispatcher.commands.length == 0)
-
+				next if (dispatcher.commands.nil? or dispatcher.commands.length == 0)
 				if dispatcher.respond_to?("cmd_#{value.split(" ").first}")
 					#print_status "Dispatcher (#{dispatcher.name}) responds to cmd_#{value.split(" ").first}"
 					return true
@@ -286,13 +284,9 @@ class Plugin::Alias < Msf::Plugin
 		def tab_complete_aliases_and_commands
 			items = []
 			# gather all the current commands the driver's dispatcher's have
-			driver.dispatcher_stack.each do |dispatcher|
-				next unless dispatcher.respond_to?(:commands)
-				next if (dispatcher.commands.nil? or dispatcher.commands.length == 0)
-				items << dispatcher.commands.keys
-			end
+			items << driver.get_all_commands
 			# add all the current aliases to the list
-			items.concat(@aliases.keys)
+			items << @aliases.keys
 			return items
 		end
 
