@@ -32,6 +32,10 @@ class Console::CommandDispatcher::Core
 			::Msf::Config.user_script_directory + File::SEPARATOR + "resource",
 			"."
 		]
+		@use_tab_completion_locations = [
+			::File.join(Msf::Config.install_root, 'data', 'meterpreter'),
+			::File.join(Msf::Config.install_root, 'modules', 'exploits', 'windows', 'local')
+		]
 
 	end
 
@@ -436,7 +440,13 @@ class Console::CommandDispatcher::Core
 		cmd_load(*args)
 	end
 	alias cmd_use_help cmd_load_help
-	alias cmd_use_tabs cmd_load_tabs
+	#alias cmd_use_tabs cmd_load_tabs
+
+	def cmd_use_tabs(str, words)
+		return [] if words.length > 1
+		return tab_complete_filenames_at(str, words, @use_tab_completion_locations, 
+			{|x| x =~ /ext_server_(.*)\.#{client.binary_suffix}|\.rb$/ and not extensions.include?($1)}) || []
+	end
 
 	def cmd_read_help
 		print_line "Usage: read <channel_id> [length]"
