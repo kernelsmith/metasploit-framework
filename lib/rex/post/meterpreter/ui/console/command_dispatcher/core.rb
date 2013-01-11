@@ -28,15 +28,18 @@ class Console::CommandDispatcher::Core
 		self.bgjobs     = []
 		self.bgjob_id   = 0
 		@resource_tab_completion_locations = [
-			::Msf::Config.script_directory + File::SEPARATOR + "resource",
-			::Msf::Config.user_script_directory + File::SEPARATOR + "resource",
+			::File.join(::Msf::Config.script_directory, "resource"),
+			::File.join(::Msf::Config.user_script_directory,"resource"),
 			"."
 		]
-		@use_tab_completion_locations = [
-			::File.join(Msf::Config.install_root, 'data', 'meterpreter'),
-			::File.join(Msf::Config.install_root, 'modules', 'exploits', 'windows', 'local')
+		@load_tab_completion_locations = [
+			::File.join(Msf::Config.install_root, 'data', 'meterpreter')
 		]
-
+		@run_tab_completion_locations = [
+			::Msf::Sessions::Meterpreter.script_base,
+			::Msf::Sessions::Meterpreter.user_script_base,
+			::File.join(Msf::Config.install_root, 'modules', 'exploits', 'windows', 'local')
+		] # @todo get the platform & match to filesystem instead of hardcoding windows here client.platform
 	end
 
 	@@load_opts = Rex::Parser::Arguments.new(
@@ -378,12 +381,13 @@ class Console::CommandDispatcher::Core
 			case opt
 				when "-l"
 					exts = []
-					path = ::File.join(Msf::Config.install_root, 'data', 'meterpreter')
-					::Dir.entries(path).each { |f|
-						if (::File.file?(::File.join(path, f)) && f =~ /ext_server_(.*)\.#{client.binary_suffix}/ )
-							exts.push($1)
+					@load_tab_completion_locations.each do |path|
+						::Dir.entries(path).each do |f|
+							if (::File.file?(::File.join(path, f)) && f =~ /ext_server_(.*)\.#{client.binary_suffix}/ )
+								exts.push($1)
+							end
 						end
-					}
+					end
 					print(exts.sort.join("\n") + "\n")
 
 					return true
@@ -439,13 +443,7 @@ class Console::CommandDispatcher::Core
 		cmd_load(*args)
 	end
 	alias cmd_use_help cmd_load_help
-	#alias cmd_use_tabs cmd_load_tabs
-
-	def cmd_use_tabs(str, words)
-		return [] if words.length > 1
-		return tab_complete_filenames_at(str, words, @use_tab_completion_locations, 
-			{|x| x =~ /ext_server_(.*)\.#{client.binary_suffix}|\.rb$/ and not extensions.include?($1)}) || []
-	end
+	alias cmd_use_tabs cmd_load_tabs
 
 	def cmd_read_help
 		print_line "Usage: read <channel_id> [length]"
@@ -527,7 +525,7 @@ class Console::CommandDispatcher::Core
 					'LocalOutput' => shell.output,
 					'OptionStr'   => opts
 				)
-			else
+			else # @todo add in local exploit call here
 				# the rest of the arguments get passed in through the binding
 				client.execute_script(script_name, args)
 			end
@@ -545,10 +543,7 @@ class Console::CommandDispatcher::Core
 				if (msf_loaded?)
 					tabs += tab_complete_postmods
 				end
-				[
-					::Msf::Sessions::Meterpreter.script_base,
-					::Msf::Sessions::Meterpreter.user_script_base
-				].each do |dir|
+				@run_tab_completion_locations .each do |dir|
 					next if not ::File.exist? dir
 					tabs += ::Dir.new(dir).find_all { |e|
 						path = dir + ::File::SEPARATOR + e
@@ -560,7 +555,13 @@ class Console::CommandDispatcher::Core
 		end
 		return tabs.map { |e| e.sub(/\.rb$/, '') }
 	end
-
+		# return tab_complete_filenames_at(str, words, @use_tab_completion_locations) do |tab| 
+		# 	if tab =~ /ext_server_(.*)\.#{client.binary_suffix}/ and not extensions.include?($1)
+		# 		$1 # if ::File.file?(::File.join(path,tab))
+		# 	elsif tab =~ /\.rb$/
+		# 		tab.sub(/\.rb$/,'')
+		# 	end
+		# end || []
 
 	#
 	# Executes a script in the context of the meterpreter session in the background

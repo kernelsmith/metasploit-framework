@@ -239,12 +239,12 @@ module DispatcherShell
 		# returned
 		#
 
-		def tab_complete_filenames_at(str, words, starting_locations=nil, &block)
+		def tab_complete_filenames_at(str, words, starting_locations=[], &block)
 			# caller can pass nil for starting_locations if default behavior of tab_complete_filenames
 			# is desired, which uses ::Readline::FILENAME_COMPLETION_PROC
 			# TODO: allow them to pass stuff like "install_root" and automatically try to prepend Msf::Config?
 			tabs = []
-			if not starting_locations or words[1] =~ (/^#{::File::SEPARATOR}/) # then just pass on to the generic
+			if starting_locations.empty? or words[1] =~ (/^#{::File::SEPARATOR}/) # then just pass on to the generic
 				tabs = tab_complete_filenames(str, words)
 			else # then let's start tab completion in the provided directories
 				# in case we get a string instead of an Array
@@ -259,12 +259,12 @@ module DispatcherShell
 						}
 					end
 				rescue Exception => e
-					print_error "This error is normally eaten #{e.to_s}"
 				end
 			end
 
 			if block_given?
-				return tabs.select(&block) # no select! available in 1.8.x
+				# tabs.each instead?  tabs.each{|t| block.call(t)}
+				return tabs.map{ |t| block.call(t) }
 			else
 				return tabs
 			end
