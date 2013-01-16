@@ -61,7 +61,7 @@ module Msf
 
 		class ConsoleCommandDispatcher
 			include Msf::Ui::Console::CommandDispatcher
-			
+
 			def name
 				"Nessus"
 			end
@@ -78,6 +78,7 @@ module Msf
 					"nessus_report_list" => "List all Nessus reports.",
 					"nessus_report_get" => "Import a report from the nessus server in Nessus v2 format.",
 					"nessus_report_del" => "Delete a report.",
+					"nessus_report_vulns" => "Get list of vulns from a report.",
 					"nessus_report_hosts" => "Get list of hosts from a report.",
 					"nessus_report_host_ports" => "Get list of open ports from a host from a report.",
 					"nessus_report_host_detail" => "Detail from a report item on a host.",
@@ -112,6 +113,7 @@ module Msf
 
 			def cmd_nessus_save(*args)
 				#if we are logged in, save session details to nessus.yaml
+				@nessus_yaml = "#{Msf::Config.get_config_root}/nessus.yaml"
 				if args[0] == "-h"
 					print_status("Usage: ")
 					print_status("       nessus_save")
@@ -220,6 +222,7 @@ module Msf
 				tbl << [ "-----------------", "-----------------"]
 				tbl << [ "nessus_report_list", "List all Nessus reports" ]
 				tbl << [ "nessus_report_get", "Import a report from the nessus server in Nessus v2 format" ]
+				tbl << [ "nessus_report_vulns", "Get list of vulns from a report" ]
 				tbl << [ "nessus_report_hosts", "Get list of hosts from a report" ]
 				tbl << [ "nessus_report_host_ports", "Get list of open ports from a host from a report" ]
 				tbl << [ "nessus_report_host_detail", "Detail from a report item on a host" ]
@@ -319,7 +322,8 @@ module Msf
 			end
 
 			def cmd_nessus_connect(*args)
-
+				# Check if config file exists and load it
+				@nessus_yaml = "#{Msf::Config.get_config_root}/nessus.yaml"
 				if ! args[0]
 					if File.exist?("#{@nessus_yaml}")
 						lconfig = YAML.load_file("#{@nessus_yaml}")
@@ -749,7 +753,7 @@ module Msf
 				plugins = total.sum
 				tbl << [users, policies, scans, reports, plugins]
 				print_good "\n"
-				print_line tbl.to_s 
+				print_line tbl.to_s
 			end
 
 			def cmd_nessus_plugin_list(*args)
@@ -953,6 +957,65 @@ module Msf
 				}
 				print_good("Report Info")
 				print_good "\n"
+				print_line tbl.to_s
+				print_status("You can:")
+				print_status("        Get information from a particular host:          nessus_report_host_ports <hostname> <report id>")
+			end
+
+			def cmd_nessus_report_vulns(*args)
+
+				if args[0] == "-h"
+					print_status("Usage: ")
+					print_status("       nessus_report_vulns <report id>")
+					print_status(" Example:> nessus_report_vulns f0eabba3-4065-7d54-5763-f191e98eb0f7f9f33db7e75a06ca")
+					print_status()
+					print_status("Returns all the vulns associated with a scan and details about hosts and their vulnerabilities")
+					print_status("use nessus_report_list to list all available scans")
+					return
+				end
+
+				if ! nessus_verify_token
+					return
+				end
+
+				case args.length
+				when 1
+					rid = args[0]
+				else
+					print_status("Usage: ")
+					print_status("       nessus_report_vulns <report id>")
+					print_status("       use nessus_report_vulns to list all available reports")
+					return
+				end
+
+				tbl = Rex::Ui::Text::Table.new(
+					'Columns' => [
+						'Hostname',
+						'Port',
+						'Proto',
+						'Sev',
+						'PluginID',
+						'Plugin Name'
+					])
+				print_status("Grabbing all vulns for report #{rid}")
+				hosts=@n.report_hosts(rid)
+				hosts.each do |host|
+					ports=@n.report_host_ports(rid, host['hostname'])
+					ports.each do |port|
+						details=@n.report_host_port_details(rid, host['hostname'], port['portnum'], port['protocol'])
+						details.each do |detail|
+							tbl << [host['hostname'],
+							port['portnum'],
+							port['protocol'],
+							detail['severity'],
+							detail['pluginID'],
+							detail['pluginName']
+							]
+						end
+					end
+				end
+				print_good("Report Info")
+				print_line
 				print_line tbl.to_s
 				print_status("You can:")
 				print_status("        Get information from a particular host:          nessus_report_host_ports <hostname> <report id>")
@@ -1416,7 +1479,7 @@ module Msf
 					return
 				end
 
-				
+
 					del = @n.policy_del(pid)
 					status = del.root.elements['status'].text
 					if status == "OK"
@@ -1476,7 +1539,7 @@ module Msf
 				tbl << [ "Plugin Pub Date", entry['plugin_publication_date'] ]
 				tbl << [ "Plugin Modification Date", entry['plugin_modification_date'] ]
 				print_good "\n"
-				print_line tbl.to_s 
+				print_line tbl.to_s
 			end
 
 			def cmd_nessus_report_del(*args)
@@ -1593,7 +1656,7 @@ module Msf
 
 		def initialize(framework, opts)
 			super
-			
+
 			add_console_dispatcher(ConsoleCommandDispatcher)
 			@nbver = "1.1" # Nessus Plugin Version.  Increments each time we commit to msf
 			@xindex = "#{Msf::Config.get_config_root}/nessus_index" # location of the exploit index file used to speed up searching for valid exploits.

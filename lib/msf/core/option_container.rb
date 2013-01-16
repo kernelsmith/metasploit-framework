@@ -1,3 +1,4 @@
+# -*- coding: binary -*-
 require 'resolv'
 require 'msf/core'
 require 'rex/socket'
@@ -87,7 +88,7 @@ class OptBase
 	def display_value(value)
 		value.to_s
 	end
-	
+
 	#
 	# The name of the option.
 	#
@@ -301,6 +302,10 @@ class OptPort < OptBase
 		return 'port'
 	end
 
+	def normalize(value)
+		value.to_i
+	end
+
 	def valid?(value)
 		return false if empty_required_value?(value)
 
@@ -438,9 +443,10 @@ class OptInt < OptBase
 	end
 
 	def valid?(value)
+		return super if !required? and value.to_s.empty?
 		return false if empty_required_value?(value)
 
-		if value and not normalize(value).to_s.match(/^\d+$/)
+		if value and not value.to_s.match(/^0x[0-9a-fA-F]+$|^-?\d+$/)
 			return false
 		end
 
@@ -462,17 +468,19 @@ class OptRegexp < OptBase
 		unless super
 			return false
 		end
+		return true if (not required? and value.nil?)
 
 		begin
 			Regexp.compile(value)
 
 			return true
-		rescue RegexpError => e
+		rescue RegexpError
 			return false
 		end
 	end
 
 	def normalize(value)
+		return nil if value.nil?
 		return Regexp.compile(value)
 	end
 
@@ -658,7 +666,7 @@ class OptionContainer < Hash
 				errors << name
 			# If the option is valid, normalize its format to the correct type.
 			elsif ((val = option.normalize(datastore[name])) != nil)
-				# This *will* result in a module that previously used the 
+				# This *will* result in a module that previously used the
 				# global datastore to have its local datastore set, which
 				# means that changing the global datastore and re-running
 				# the same module will now use the newly-normalized local

@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -27,13 +23,12 @@ class Metasploit3 < Msf::Auxiliary
 				bytes can be used, limiting the likelihood for arbitrary code execution.
 			},
 			'Author'         => [ 'patrick' ],
-			'Version'        => '$Revision$',
 			'References'     =>
 				[
 					[ 'OSVDB', '2577' ],
 					[ 'CVE', '2003-0694' ],
 					[ 'BID', '8641' ],
-					[ 'URL', 'http://www.milw0rm.com/exploits/24' ],
+					[ 'EDB', '24' ]
 				],
 			'DisclosureDate' => 'Sep 17 2003'))
 	end

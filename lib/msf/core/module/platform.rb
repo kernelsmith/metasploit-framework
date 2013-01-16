@@ -1,3 +1,4 @@
+# -*- coding: binary -*-
 require 'abbrev'
 
 #
@@ -336,6 +337,14 @@ class Msf::Module::Platform
 	class Java < Msf::Module::Platform
 		Rank = 100
 		Alias = "java"
+	end
+
+	#
+	# Ruby
+	#
+	class Ruby < Msf::Module::Platform
+		Rank = 100
+		Alias = "ruby"
 	end
 
 	#

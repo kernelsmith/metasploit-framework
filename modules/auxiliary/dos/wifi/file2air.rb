@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -29,8 +25,7 @@ class Metasploit3 < Msf::Auxiliary
 			},
 			# 11/03/2008
 			'Author'      => 'kris katterjohn',
-			'License'     => MSF_LICENSE,
-			'Version'     => '$Revision$'
+			'License'     => MSF_LICENSE
 		))
 
 		register_options([
@@ -115,4 +110,3 @@ class Metasploit3 < Msf::Auxiliary
 		frame[16,6] = eton(addr) if addr
 	end
 end
-

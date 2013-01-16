@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -20,7 +16,6 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'Telnet Service Encyption Key ID Overflow Detection',
-			'Version'     => '$Revision$',
 			'Description' => 'Detect telnet services vulnerable to the encrypt option Key ID overflow (BSD-derived telnetd)',
 			'Author'      => [ 'Jaime Penalba Estebanez <jpenalbae[at]gmail.com>', 'hdm' ],
 			'License'     => MSF_LICENSE,
@@ -28,7 +23,8 @@ class Metasploit3 < Msf::Auxiliary
 				[
 					['BID', '51182'],
 					['CVE', '2011-4862'],
-					['URL', 'http://www.exploit-db.com/exploits/18280/']
+					['EDB', '18280'],
+					['URL', 'https://community.rapid7.com/community/metasploit/blog/2011/12/28/more-fun-with-bsd-derived-telnet-daemons']
 				]
 		)
 		register_options(
@@ -50,7 +46,7 @@ class Metasploit3 < Msf::Auxiliary
 
 				# This makes db_services look a lot nicer.
 				banner_sanitized = Rex::Text.to_hex_ascii(banner.to_s)
-				report_service(:host => rhost, :port => rport, :name => "telnet", :info => banner_sanitized)
+				svc = report_service(:host => rhost, :port => rport, :name => "telnet", :info => banner_sanitized)
 
 				# Check for encryption option ( IS(0) DES_CFB64(1) )
 				sock.put("\xff\xfa\x26\x00\x01\x01\x12\x13\x14\x15\x16\x17\x18\x19\xff\xf0")
@@ -124,12 +120,11 @@ class Metasploit3 < Msf::Auxiliary
 				print_good("#{ip}:#{rport} VULNERABLE: #{banner_sanitized}")
 				report_vuln(
 					{
-							:host	=> ip,
-							:port	=> rport,
-							:proto  => 'tcp',
-							:name	=> self.fullname,
-							:info	=> banner_sanitized,
-							:refs   => self.references
+							:host	  => ip,
+							:service  => svc,
+							:name	  => self.name,
+							:info	  => "Module #{self.fullname} confirmed acceptance of a long key ID: #{banner_sanitized}",
+							:refs     => self.references
 					}
 				)
 

@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -26,12 +22,11 @@ class Metasploit3 < Msf::Auxiliary
 			},
 			'Author'         => 'kris katterjohn',
 			'License'        => MSF_LICENSE,
-			'Version'        => '$Revision$',
 			'References'     =>
 				[
 					[ 'CVE', '2008-5666' ],
 					[ 'OSVDB', '49043' ],
-					[ 'URL', 'http://milw0rm.com/exploits/6581' ]
+					[ 'EDB', '6581' ]
 				],
 			'DisclosureDate' => 'Sep 26 2008'))
 	end

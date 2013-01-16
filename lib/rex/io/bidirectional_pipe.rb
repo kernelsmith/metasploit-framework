@@ -1,3 +1,4 @@
+# -*- coding: binary -*-
 module Rex
 module IO
 
@@ -95,6 +96,10 @@ class BidirectionalPipe < Rex::Ui::Text::Input
 
 	def print_status(msg='')
 		print_line('[*] ' + msg)
+	end
+
+	def print_warning(msg='')
+		print_warning('[!] ' + msg)
 	end
 
 	#

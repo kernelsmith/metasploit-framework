@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -11,9 +7,6 @@
 
 require 'rex/proto/http'
 require 'msf/core'
-
-
-
 
 class Metasploit3 < Msf::Auxiliary
 
@@ -31,8 +24,7 @@ class Metasploit3 < Msf::Auxiliary
 
 			},
 			'Author' 		=> [ 'et [at] cyberspace.org' ],
-			'License'		=> BSD_LICENSE,
-			'Version'		=> '$Revision$'))
+			'License'		=> BSD_LICENSE))
 
 		register_options(
 			[
@@ -106,7 +98,7 @@ class Metasploit3 < Msf::Auxiliary
 
 		if http_method == 'POST'
 			reqinfo = {
-				'uri'  		=> datastore['PATH'],
+				'uri'  		=> normalize_uri(datastore['PATH']),
 				'query' 	=> datastore['QUERY'],
 				'data' 		=> datastore['DATA'],
 				'method'   	=> http_method,
@@ -115,7 +107,7 @@ class Metasploit3 < Msf::Auxiliary
 			}
 		else
 			reqinfo = {
-				'uri'  		=> datastore['PATH'],
+				'uri'  		=> normalize_uri(datastore['PATH']),
 				'query' 	=> datastore['QUERY'],
 				'method'   	=> http_method,
 				'ctype'		=> 'application/x-www-form-urlencoded',
@@ -153,7 +145,7 @@ class Metasploit3 < Msf::Auxiliary
 				print_error("[#{wmap_target_host}] Error string appears in the normal response, unable to test")
 				print_error("[#{wmap_target_host}] Error string: '#{inje}'")
 				print_error("[#{wmap_target_host}] DB TYPE: #{dbt}, Error type '#{injt}'")
-			
+
 				report_web_vuln(
 					:host	=> ip,
 					:port	=> rport,
@@ -209,7 +201,7 @@ class Metasploit3 < Msf::Auxiliary
 
 					if http_method == 'POST'
 						reqinfo = {
-							'uri'  		=> datastore['PATH'],
+							'uri'  		=> normalize_uri(datastore['PATH']),
 							'query'		=> datastore['QUERY'],
 							'data' 		=> fstr,
 							'method'   	=> http_method,
@@ -218,7 +210,7 @@ class Metasploit3 < Msf::Auxiliary
 						}
 					else
 						reqinfo = {
-							'uri'  		=> datastore['PATH'],
+							'uri'  		=> normalize_uri(datastore['PATH']),
 							'query' 	=> fstr,
 							'method'   	=> http_method,
 							'ctype'		=> 'application/x-www-form-urlencoded',
@@ -245,9 +237,9 @@ class Metasploit3 < Msf::Auxiliary
 						end
 
 						if found
-							print_status("[#{wmap_target_host}] SQL Injection found. (#{idesc}) (#{datastore['PATH']})")
-							print_status("[#{wmap_target_host}] Error string: '#{inje}' Test Value: #{qvars[key]}")
-							print_status("[#{wmap_target_host}] Vuln query parameter: #{key} DB TYPE: #{dbt}, Error type '#{injt}'")
+							print_good("[#{wmap_target_host}] SQL Injection found. (#{idesc}) (#{datastore['PATH']})")
+							print_good("[#{wmap_target_host}] Error string: '#{inje}' Test Value: #{qvars[key]}")
+							print_good("[#{wmap_target_host}] Vuln query parameter: #{key} DB TYPE: #{dbt}, Error type '#{injt}'")
 
 							report_web_vuln(
 								:host	=> ip,
@@ -256,8 +248,8 @@ class Metasploit3 < Msf::Auxiliary
 								:ssl    => ssl,
 								:path	=> datastore['PATH'],
 								:method => datastore['METHOD'],
-								:pname  => "#{key}",
-								:proof  => "#{istr}",
+								:pname  => key,
+								:proof  => istr,
 								:risk   => 2,
 								:confidence   => 50,
 								:category     => 'SQL injection',

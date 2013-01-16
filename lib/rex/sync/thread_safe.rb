@@ -1,3 +1,4 @@
+# -*- coding: binary -*-
 require 'timeout'
 
 module Rex
@@ -71,7 +72,7 @@ module ThreadSafe
 	# Simulates a sleep operation by selecting on nil until a timeout period
 	# expires.
 	#
-	def self.sleep(seconds)
+	def self.sleep(seconds=nil)
 		self.select(nil, nil, nil, seconds)
 
 		seconds

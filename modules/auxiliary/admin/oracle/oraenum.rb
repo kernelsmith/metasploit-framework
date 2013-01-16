@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -26,8 +22,7 @@ class Metasploit3 < Msf::Auxiliary
 				run.
 			},
 			'Author'         => [ 'Carlos Perez <carlos_perez[at]darkoperator.com>' ],
-			'License'        => MSF_LICENSE,
-			'Version'        => '$Revision$'
+			'License'        => MSF_LICENSE
 		))
 
 	end
@@ -47,6 +42,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -230,6 +227,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -255,6 +254,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -280,6 +281,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -305,6 +308,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -330,6 +335,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -356,6 +363,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -394,6 +403,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -447,6 +458,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -496,6 +509,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -523,6 +538,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -549,6 +566,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -576,6 +595,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -604,6 +625,8 @@ class Metasploit3 < Msf::Auxiliary
 		rescue => e
 			if e.to_s =~ /ORA-00942: table or view does not exist/
 				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 
@@ -639,7 +662,7 @@ class Metasploit3 < Msf::Auxiliary
 				accts = {}
 				returnedstring.each do |record|
 					user,pass = record.split(",")
-					accts["#{pass.chomp}"] = "#{user}"
+					accts["#{pass.chomp}"] = user
 				end
 				::File.open(ordfltpss, "rb").each_line do  |l|
 					accrcrd =  l.split(",")
@@ -656,6 +679,12 @@ class Metasploit3 < Msf::Auxiliary
 						)
 					end
 				end
+			end
+		rescue => e
+			if e.to_s =~ /ORA-00942: table or view does not exist/
+				print_error("It appears you do not have sufficient rights to perform the check")
+			else
+				raise e
 			end
 		end
 	end

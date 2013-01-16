@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -23,12 +19,12 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'           => 'VMWare Screenshot Stealer',
-			'Version'        => '$Revision$',
 			'Description'    => %Q{
-							This module uses supplied login credentials to connect to VMWare via
-							the web interface. It then searches through the datastores looking for screenshots.
-							It will downlaod any screenshots it finds and save them as loot.},
-			'Author'         => ['TheLightCosine <thelightcosine[at]metasploit.com>'],
+				This module uses supplied login credentials to connect to VMWare via
+				the web interface. It then searches through the datastores looking for screenshots.
+				It will downlaod any screenshots it finds and save them as loot.
+			},
+			'Author'         => ['theLightCosine'],
 			'License'        => MSF_LICENSE
 		)
 
@@ -38,7 +34,7 @@ class Metasploit3 < Msf::Auxiliary
 				OptString.new('USERNAME', [ true, "The username to Authenticate with.", 'root' ]),
 				OptString.new('PASSWORD', [ true, "The password to Authenticate with.", 'password' ])
 			], self.class)
-			
+
 		register_advanced_options([OptBool.new('SSL', [ false, 'Negotiate SSL for outgoing connections', true]),])
 	end
 
@@ -93,7 +89,7 @@ class Metasploit3 < Msf::Auxiliary
 			'cookie'  => @vim_cookie,
 			'headers' => { 'Authorization' => "Basic #{@user_pass}"}
 		}, 25)
-		if res 
+		if res
 			@vim_cookie = res.headers['Set-Cookie']
 			if res.code == 200
 				img = res.body
@@ -105,8 +101,7 @@ class Metasploit3 < Msf::Auxiliary
 		else
 			print_error "Failed to retrieve screenshot: there was no reply"
 		end
-	
+
 	end
 
 end
-

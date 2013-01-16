@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -20,9 +16,8 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'Lantronix Telnet Service Banner Detection',
-			'Version'     => '$Revision$',
 			'Description' => 'Detect Lantronix telnet services',
-			'Author'      => ['TheLightCosine <thelightcosine[at]metasploit.com>', 'hdm'],
+			'Author'      => ['theLightCosine', 'hdm'],
 			'License'     => MSF_LICENSE
 		)
 		register_options(
@@ -44,9 +39,9 @@ class Metasploit3 < Msf::Auxiliary
 			::Timeout.timeout(to) do
 				res = connect
 				if banner.start_with? "MAC address"
-					print_status("#{ip}:#{rport} TELNET: \n #{banner}")
+					print_status("#{ip}:#{rport} TELNET: #{banner}")
 					version = banner.match(/Software version [\w\.]+ \(\d+\) \w*$/)[0]
-					report_service(:host => rhost, :port => rport, :name => "telnet", :info => version )
+					report_service(:host => rhost, :port => rport, :name => "telnet", :info => "Lantronix Version: #{version}" )
 				end
 			end
 		rescue ::Rex::ConnectionError
@@ -57,4 +52,3 @@ class Metasploit3 < Msf::Auxiliary
 		end
 	end
 end
-

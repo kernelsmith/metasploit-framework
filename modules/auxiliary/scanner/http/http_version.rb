@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -24,12 +20,11 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'HTTP Version Detection',
-			'Version'     => '$Revision$',
 			'Description' => 'Display version information about each system',
 			'Author'      => 'hdm',
 			'License'     => MSF_LICENSE
 		)
-		
+
 		register_wmap_options({
 				'OrderID' => 0,
 				'Require' => {},
@@ -39,11 +34,15 @@ class Metasploit3 < Msf::Auxiliary
 	# Fingerprint a single host
 	def run_host(ip)
 		begin
-			fp = http_fingerprint
+			connect
+
+			res = send_request_raw({'uri' => '/', 'method' => 'GET' })
+			return if not res
+
+			fp = http_fingerprint(:response => res)
 			print_status("#{ip}:#{rport} #{fp}") if fp
 		rescue ::Timeout::Error, ::Errno::EPIPE
 		end
 	end
 
 end
-

@@ -1,14 +1,9 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
 #   http://metasploit.com/
 ##
-
 
 require 'msf/core'
 
@@ -24,8 +19,7 @@ class Metasploit3 < Msf::Auxiliary
 				This module will connect to a FTP server and perform pre- and post-authentication fuzzing
 			},
 			'Author'         => [ 'corelanc0d3r <peter.ve[at]corelan.be>', 'jduck' ],
-			'License'        => MSF_LICENSE,
-			'Version'        => '$Revision$'
+			'License'        => MSF_LICENSE
 			)
 
 		register_options(
@@ -167,7 +161,7 @@ class Metasploit3 < Msf::Auxiliary
 			@evilchars = ['']
 		end
 
-		print_status("Connecting to host " + ip + " on port " + datastore['RPORT'])
+		print_status("Connecting to host " + ip + " on port " + datastore['RPORT'].to_s)
 
 		if (startstage == 1)
 			process_phase(1, "Fuzzing without command")

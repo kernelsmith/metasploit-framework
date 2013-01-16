@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -25,7 +21,6 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'           => 'HTTP Login Utility',
-			'Version'        => '$Revision$',
 			'Description'    => 'This module attempts to authenticate to an HTTP service.',
 			'References'  =>
 				[
@@ -41,7 +36,6 @@ class Metasploit3 < Msf::Auxiliary
 
 		register_options(
 			[
-				Opt::RPORT(80),
 				OptPath.new('USERPASS_FILE',  [ false, "File containing users and passwords separated by space, one pair per line",
 					File.join(Msf::Config.install_root, "data", "wordlists", "http_default_userpass.txt") ]),
 				OptPath.new('USER_FILE',  [ false, "File containing users, one per line",
@@ -303,7 +297,7 @@ class Metasploit3 < Msf::Auxiliary
 
 			return :abort if (res.code == 404)
 
-			if ( [200, 301, 302].include?(res.code) ) or (res.code == 201) 
+			if ( [200, 301, 302].include?(res.code) ) or (res.code == 201)
 				if ((res.code == 201) and (requesttype == "PUT"))
 					print_good("Trying to delete #{path}")
 					del_res,c = send_digest_request_cgi({
@@ -334,4 +328,3 @@ class Metasploit3 < Msf::Auxiliary
 	end
 
 end
-

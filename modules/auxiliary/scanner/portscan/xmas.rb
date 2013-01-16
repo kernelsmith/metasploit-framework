@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -26,7 +22,6 @@ class Metasploit3 < Msf::Auxiliary
 				PSH and URG flags.
 			},
 			'Author'      => 'kris katterjohn',
-			'Version'     => '$Revision$', # 04/08/2009
 			'License'     => MSF_LICENSE
 		)
 
@@ -44,7 +39,7 @@ class Metasploit3 < Msf::Auxiliary
 	def support_ipv6?
 		false
 	end
-	
+
 	def run_batch_size
 		datastore['BATCHSIZE'] || 256
 	end
@@ -142,4 +137,3 @@ class Metasploit3 < Msf::Auxiliary
 	end
 
 end
-

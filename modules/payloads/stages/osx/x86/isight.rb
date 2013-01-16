@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -29,8 +25,7 @@ module Metasploit3
 
 	def initialize(info = {})
 		super(update_info(info,
-			'Name'          => 'Mac OS X x86 iSight photo capture',
-			'Version'       => '$Revision$',
+			'Name'          => 'Mac OS X x86 iSight Photo Capture',
 			'Description'   => 'Inject a Mach-O bundle to capture a photo from the iSight (staged)',
 			'Author'        => 'ddz',
 			'License'       => MSF_LICENSE,
@@ -96,4 +91,3 @@ module Metasploit3
 	end
 
 end
-

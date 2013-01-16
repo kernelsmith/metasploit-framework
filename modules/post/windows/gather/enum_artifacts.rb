@@ -10,6 +10,7 @@ require 'msf/core'
 require 'msf/core/post/file'
 require 'msf/core/post/windows/registry'
 require 'yaml'
+require 'msf/core/auxiliary/report'
 
 class Metasploit3 < Msf::Post
 
@@ -26,7 +27,7 @@ class Metasploit3 < Msf::Post
 				matches are written to the loot. },
 			'License'       => MSF_LICENSE,
 			'Author'        => [ 'averagesecurityguy <stephen[at]averagesecurityguy.info>' ],
-			'Platform'      => [ 'windows' ],
+			'Platform'      => [ 'win' ],
 			'SessionTypes'  => [ 'meterpreter' ]
 		))
 
@@ -70,7 +71,7 @@ class Metasploit3 < Msf::Post
 				next if digest == nil
 				if digest == file['csum'] then found << file['name'] end
 			end
-			
+
 			# Process registry entries
 			vprint_status("Processing #{regs.length.to_s} registry entries for #{key}.")
 
@@ -80,7 +81,7 @@ class Metasploit3 < Msf::Post
 					found << reg['key'] + '\\' + reg['val']
 				end
 			end
-			
+
 			# Did we find anything? If so store it in the evidence hash to be
 			# saved in the loot.
 			if found.empty?

@@ -31,7 +31,6 @@ class Metasploit3 < Msf::Auxiliary
 			},
 			'Author'         => [ 'K. Reid Wightman <wightman[at]digitalbond.com>' ],
 			'License'        => MSF_LICENSE,
-			'Version'        => '$Revision: 1 $',
 			'DisclosureDate' => 'Jan 19 2012'
 			))
 
@@ -65,7 +64,7 @@ class Metasploit3 < Msf::Auxiliary
 		if (ip or rhost) and rport
 			[(ip || rhost),rport].map {|x| x.to_s}.join(":") << " "
 		elsif (ip or rhost)
-			"#{rhost}"
+			rhost
 		else
 			""
 		end

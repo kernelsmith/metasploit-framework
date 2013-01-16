@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -19,8 +15,7 @@ class Metasploit3 < Msf::Auxiliary
 
 	def initialize
 		super(
-			'Name'        => 'pcAnywhere TCP Service Discovery',
-			'Version'     => '$Revision$',
+			'Name'        => 'PcAnywhere TCP Service Discovery',
 			'Description' => 'Discover active pcAnywhere services through TCP',
 			'Author'      => 'hdm',
 			'License'     => MSF_LICENSE
@@ -54,8 +49,8 @@ class Metasploit3 < Msf::Auxiliary
 			print_status(Rex::Text.to_hex_dump(res))
 =end
 
-			report_service(:host => rhost, :port => rport, :name => "pcanywhere", :info => "")
-			print_status("#{rhost}:#{rport} pcAnywhere")
+			report_service(:host => rhost, :port => rport, :name => "pcanywhere_data", :info => "")
+			print_status("#{rhost}:#{rport} pcAnywhere data service")
 
 		rescue ::Rex::ConnectionError, ::EOFError, ::Errno::ECONNRESET
 		rescue ::Exception => e
@@ -63,4 +58,3 @@ class Metasploit3 < Msf::Auxiliary
 		end
 	end
 end
-

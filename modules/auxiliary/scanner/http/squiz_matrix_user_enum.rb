@@ -1,7 +1,3 @@
-##
-# $Id$
-##
-
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -37,7 +33,6 @@ class Metasploit3 < Msf::Auxiliary
 			},
 			'Author'         => [ 'Troy Rose <troy[at]osisecurity.com.au>', 'patrick' ],
 			'License'        => MSF_LICENSE,
-			'Version'        => '$Revision$',
 			'References'     =>
 				[
 					[ 'URL', 'http://www.osisecurity.com.au/advisories/' ],
@@ -46,7 +41,6 @@ class Metasploit3 < Msf::Auxiliary
 
 		register_options(
 			[
-				Opt::RPORT(80),
 				OptString.new('URI', [true, 'The path to users Squiz Matrix installation', '/']),
 				OptInt.new('ASSETBEGIN',  [ true, "Asset ID to start at", 1]),
 				OptInt.new('ASSETEND',  [ true, "Asset ID to stop at", 100]),
@@ -55,7 +49,8 @@ class Metasploit3 < Msf::Auxiliary
 	end
 
 	def target_url
-		"http://#{vhost}:#{rport}#{datastore['URI']}"
+		uri = normalize_uri(datastore['URI'])
+		"http://#{vhost}:#{rport}#{uri}"
 	end
 
 	def run_host(ip)

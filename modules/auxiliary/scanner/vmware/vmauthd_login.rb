@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -23,11 +19,10 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'VMWare Authentication Daemon Login Scanner',
-			'Version'     => '$Revision$',
 			'Description' => %q{This module will test vmauthd logins on a range of machines and
 								report successful logins.
 			},
-			'Author'      => ['TheLightCosine <thelightcosine[at]metasploit.com>'],
+			'Author'      => ['theLightCosine'],
 			'References'     =>
 				[
 					[ 'CVE', '1999-0502'] # Weak password
@@ -105,7 +100,7 @@ class Metasploit3 < Msf::Auxiliary
 			return ret_msg
 		end
 		nsock.put("PASS #{pass}\r\n")
-		res = nsock.get_once
+		res = nsock.get_once || ''
 		if res.start_with? "530"
 			return :failed
 		elsif res.start_with? "230"
@@ -140,4 +135,3 @@ class Metasploit3 < Msf::Auxiliary
 
 
 end
-

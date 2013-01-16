@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -20,7 +16,6 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'POP3 Banner Grabber',
-			'Version'     => '$Revision$',
 			'Description' => 'POP3 Banner Grabber',
 			'Author'      => 'hdm',
 			'License'     => MSF_LICENSE
@@ -44,4 +39,3 @@ class Metasploit3 < Msf::Auxiliary
 	end
 
 end
-

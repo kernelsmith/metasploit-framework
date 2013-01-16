@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -18,8 +14,7 @@ module Metasploit3
 
 	def initialize(info = {})
 		super(merge_info(info,
-			'Name'          => 'OSX x64 Execute Command',
-			'Version'       => '$Revision$',
+			'Name'          => 'OS X x64 Execute Command',
 			'Description'   => 'Execute an arbitrary command',
 			'Author'        => 'argp <argp[at]census-labs.com>',
 			'License'       => MSF_LICENSE,

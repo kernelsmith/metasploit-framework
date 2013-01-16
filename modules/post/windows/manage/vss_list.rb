@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -31,9 +27,9 @@ class Metasploit3 < Msf::Post
 				Works on win2k3 and later.
 				},
 			'License'              => MSF_LICENSE,
-			'Platform'             => ['windows'],
+			'Platform'             => ['win'],
 			'SessionTypes'         => ['meterpreter'],
-			'Author'               => ['thelightcosine <thelightcosine[at]metasploit.com>'],
+			'Author'               => ['theLightCosine'],
 			'References'    => [
 				[ 'URL', 'http://pauldotcom.com/2011/11/safely-dumping-hashes-from-liv.html' ]
 			]
@@ -53,7 +49,7 @@ class Metasploit3 < Msf::Post
 		unless start_vss
 			return
 		end
-		
+
 		list = ""
 		shadow_copies = vss_list
 		unless shadow_copies.empty?
@@ -77,7 +73,5 @@ class Metasploit3 < Msf::Post
 			)
 		end
 	end
-
-
 
 end

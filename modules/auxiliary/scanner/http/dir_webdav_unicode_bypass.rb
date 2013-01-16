@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -40,8 +36,7 @@ class Metasploit3 < Msf::Auxiliary
 					[ 'CVE', '2009-1122' ],
 					[ 'OSVDB', '54555' ],
 					[ 'BID', '34993' ],
-				],
-			'Version'		=> '$Revision$'))
+				]))
 
 		register_options(
 			[
@@ -69,7 +64,7 @@ class Metasploit3 < Msf::Auxiliary
 		ecode = nil
 		emesg = nil
 
-		tpath = datastore['PATH']
+		tpath = normalize_uri(datastore['PATH'])
 		if tpath[-1,1] != '/'
 			tpath += '/'
 		end
@@ -174,7 +169,7 @@ class Metasploit3 < Msf::Auxiliary
 
 						# Unable to use report_web_vuln as method is PROPFIND and is not part of allowed
 						# list in db.rb
-						
+
 						report_note(
 							:host	=> ip,
 							:proto => 'tcp',
@@ -184,7 +179,7 @@ class Metasploit3 < Msf::Auxiliary
 							:data	=> "#{tpath}%c0%af#{testfdir} Code: #{res.code}",
 							:update => :unique_data
 						)
-						
+
 					end
 				end
 
@@ -195,4 +190,3 @@ class Metasploit3 < Msf::Auxiliary
 
 	end
 end
-

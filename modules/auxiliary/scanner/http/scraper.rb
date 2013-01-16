@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -25,7 +21,6 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'HTTP Page Scraper',
-			'Version'     => '$Revision$',
 			'Description' => 'Scrap defined data from a specific web page based on a regular expresion',
 			'Author'       => ['et'],
 			'License'     => MSF_LICENSE
@@ -42,7 +37,7 @@ class Metasploit3 < Msf::Auxiliary
 
 	def run_host(target_host)
 
-		tpath = datastore['PATH']
+		tpath = normalize_uri(datastore['PATH'])
 		if tpath[-1,1] != '/'
 			tpath += '/'
 		end
@@ -68,16 +63,16 @@ class Metasploit3 < Msf::Auxiliary
 
 			result.each do |u|
 				print_status("[#{target_host}] #{tpath} [#{u}]")
-				
+
 				report_web_vuln(
 					:host	=> target_host,
 					:port	=> rport,
 					:vhost  => vhost,
 					:ssl    => ssl,
-					:path	=> "#{tpath}",
+					:path	=> tpath,
 					:method => 'GET',
 					:pname  => "",
-					:proof  => "#{u}",
+					:proof  => u,
 					:risk   => 0,
 					:confidence   => 100,
 					:category     => 'scraper',
@@ -92,4 +87,3 @@ class Metasploit3 < Msf::Auxiliary
 		end
 	end
 end
-

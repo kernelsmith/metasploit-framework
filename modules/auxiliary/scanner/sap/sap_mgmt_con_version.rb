@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -20,7 +16,6 @@ class Metasploit4 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'         => 'SAP Management Console Version Detection',
-			'Version'      => '$Revision$',
 			'Description'  => %q{
 				This module simply attempts to identify the version of SAP
 				through the SAP Management Console SOAP Interface.
@@ -49,11 +44,8 @@ class Metasploit4 < Msf::Auxiliary
 
 	def run_host(ip)
 		res = send_request_cgi({
-			'uri'	 => "/#{datastore['URI']}",
-			'method'  => 'GET',
-				'headers' => {
-					'User-Agent' => datastore['UserAgent']
-				}
+			'uri'	 => normalize_uri(datastore['URI']),
+			'method'  => 'GET'
 		}, 25)
 
 		if not res
@@ -87,7 +79,7 @@ class Metasploit4 < Msf::Auxiliary
 
 		begin
 			res = send_request_raw({
-				'uri'      => "/#{datastore['URI']}",
+				'uri'      => normalize_uri(datastore['URI']),
 				'method'   => 'POST',
 				'data'     => data,
 				'headers'  =>
@@ -98,22 +90,22 @@ class Metasploit4 < Msf::Auxiliary
 					}
 			}, 15)
 
-			if res.code == 200
+			if res and res.code == 200
 				body = res.body
 				if body.match(/<VersionInfo>([^<]+)<\/VersionInfo>/)
-					version = "#{$1}"
+					version = $1
 					success = true
 				end
 				if body.match(/[\\\/]sap[\\\/](\w{3})/i)
-					sapsid = "#{$1}"
+					sapsid = $1
 					success = true
 				else
 					sapsid = "Unknown"
 				end
-			elsif res.code == 500
+			elsif res and res.code == 500
 				case res.body
 				when /<faultstring>(.*)<\/faultstring>/i
-						faultcode = "#{$1}"
+						faultcode = $1
 						fault = true
 				end
 			end
@@ -129,17 +121,17 @@ class Metasploit4 < Msf::Auxiliary
 			print_good("[SAP] SID: #{sapsid.upcase}")
 
 			report_note(
-				:host => "#{rhost}",
+				:host => rhost,
 				:proto => 'SOAP',
-				:port => "#{rport}",
+				:port => rport,
 				:type => 'SAP Version',
 				:data => "SAP Version: #{version}"
 			)
 
 			report_note(
-				:host => "#{rhost}",
+				:host => rhost,
 				:proto => 'SOAP',
-				:port => "#{rport}",
+				:port => rport,
 				:type => 'SAP SID',
 				:data => "SAP SID: #{sapsid.upcase}"
 			)

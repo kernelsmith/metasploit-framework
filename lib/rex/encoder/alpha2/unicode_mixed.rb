@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+# -*- coding: binary -*-
 
 require 'rex/encoder/alpha2/generic'
 
@@ -38,7 +39,12 @@ class UnicodeMixed < Generic
 			'EDI'   => 'WWYA' + mod,         # push edi, pop edi
 		}
 
-		return regprefix[reg]	
+		prefix = regprefix[reg.upcase]
+		if prefix.nil?
+			raise "Critical: Invalid register"
+		end
+
+		return prefix
 	end
 
 	def self.gen_decoder(reg, offset)

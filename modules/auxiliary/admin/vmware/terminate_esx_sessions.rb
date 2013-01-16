@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -23,9 +19,9 @@ class Metasploit3 < Msf::Auxiliary
 		super(
 			'Name'           => 'VMWare Terminate ESX Login Sessions',
 			'Description'    => %Q{
-							This module will log into the Web API of VMWare and try to terminate
-							user login sessions as specified by the session keys.},
-			'Author'         => ['TheLightCosine <thelightcosine[at]metasploit.com>'],
+				This module will log into the Web API of VMWare and try to terminate
+				user login sessions as specified by the session keys.},
+			'Author'         => ['theLightCosine'],
 			'License'        => MSF_LICENSE
 		)
 
@@ -36,7 +32,7 @@ class Metasploit3 < Msf::Auxiliary
 				OptString.new('PASSWORD', [ true, "The password to Authenticate with.", 'password' ]),
 				OptString.new('KEYS', [true, "The session key to terminate"])
 			], self.class)
-			
+
 		register_advanced_options([OptBool.new('SSL', [ false, 'Negotiate SSL for outgoing connections', true]),])
 	end
 
@@ -60,8 +56,4 @@ class Metasploit3 < Msf::Auxiliary
 		end
 	end
 
-
-
-
 end
-

@@ -1,3 +1,4 @@
+# -*- coding: binary -*-
 require 'msf/ui/console/command_dispatcher/encoder'
 require 'msf/ui/console/command_dispatcher/exploit'
 require 'msf/ui/console/command_dispatcher/nop'
@@ -1232,7 +1233,7 @@ class Core
 				curr_path = path
 
 				# Load modules, but do not consult the cache
-				if (counts = framework.modules.add_module_path(path, false))
+				if (counts = framework.modules.add_module_path(path))
 					counts.each_pair { |type, count|
 						totals[type] = (totals[type]) ? (totals[type] + count) : count
 
@@ -1303,7 +1304,8 @@ class Core
 			"author"   => "Modules written by this author",
 			"cve"      => "Modules with a matching CVE ID",
 			"bid"      => "Modules with a matching Bugtraq ID",
-			"osvdb"    => "Modules with a matching OSVDB ID"
+			"osvdb"    => "Modules with a matching OSVDB ID",
+			"edb"      => "Modules with a matching Exploit-DB ID"
 		}.each_pair do |keyword, description|
 			print_line "  #{keyword.ljust 10}:  #{description}"
 		end
@@ -1332,15 +1334,43 @@ class Core
 			end
 		}
 
+		if framework.db and framework.db.migrated and framework.db.modules_cached
+			search_modules_sql(match)
+			return
+		end
+
+		print_warning("Database not connected or cache not built, using slow search")
+
 		tbl = generate_module_table("Matching Modules")
-		framework.modules.each do |m|
-			o = framework.modules.create(m[0])
-			if not o.search_filter(match)
-				tbl << [ o.fullname, o.disclosure_date.to_s, o.rank_to_s, o.name ]
+		[
+			framework.exploits,
+			framework.auxiliary,
+			framework.post,
+			framework.payloads,
+			framework.nops,
+			framework.encoders
+		].each do |mset|
+			mset.each do |m|
+				o = mset.create(m[0]) rescue nil
+
+				# Expected if modules are loaded without the right pre-requirements
+				next if not o
+
+				if not o.search_filter(match)
+					tbl << [ o.fullname, o.disclosure_date.to_s, o.rank_to_s, o.name ]
+				end
 			end
 		end
 		print_line(tbl.to_s)
 
+	end
+
+	def search_modules_sql(match)
+		tbl = generate_module_table("Matching Modules")
+		framework.db.search_modules(match).each do |o|
+			tbl << [ o.fullname, o.disclosure_date.to_s, RankingName[o.rank].to_s, o.name ]
+		end
+		print_line(tbl.to_s)
 	end
 
 	def cmd_search_tabs(str, words)
@@ -1702,6 +1732,14 @@ class Core
 			global = true
 		end
 
+		# Decide if this is an append operation
+		append = false
+
+		if (args[0] == '-a')
+			args.shift
+			append = true
+		end
+
 		# Determine which data store we're operating on
 		if (active_module and global == false)
 			datastore = active_module.datastore
@@ -1759,9 +1797,13 @@ class Core
 			return true
 		end
 
-		datastore[name] = value
+		if append
+			datastore[name] = datastore[name] + value
+		else
+			datastore[name] = value
+		end
 
-		print_line("#{name} => #{value}")
+		print_line("#{name} => #{datastore[name]}")
 	end
 
 	#
@@ -1817,7 +1859,7 @@ class Core
 		end
 
 		if (mod.exploit? and mod.datastore['PAYLOAD'])
-			p = framework.modules.create(mod.datastore['PAYLOAD'])
+			p = framework.payloads.create(mod.datastore['PAYLOAD'])
 			if (p)
 				p.options.sorted.each { |e|
 					name, opt = e
@@ -2277,7 +2319,7 @@ class Core
 	# Returns the revision of the framework and console library
 	#
 	def cmd_version(*args)
-		svn_console_version = "$Revision: 14065 $"
+		svn_console_version = "$Revision: 15168 $"
 		svn_metasploit_version = Msf::Framework::Revision.match(/ (.+?) \$/)[1] rescue nil
 		if svn_metasploit_version
 			print_line("Framework: #{Msf::Framework::Version}.#{svn_metasploit_version}")
@@ -2323,6 +2365,7 @@ class Core
 			return option_values_payloads() if opt.upcase == 'PAYLOAD'
 			return option_values_targets()  if opt.upcase == 'TARGET'
 			return option_values_nops()     if opt.upcase == 'NOPS'
+			return option_values_encoders() if opt.upcase == 'StageEncoder'
 		end
 
 		# Well-known option names specific to auxiliaries
@@ -2336,7 +2379,7 @@ class Core
 		end
 
 		# Well-known option names specific to post-exploitation
-		if (mod.post?)
+		if (mod.post? or mod.exploit?)
 			return option_values_sessions() if opt.upcase == 'SESSION'
 		end
 
@@ -2347,7 +2390,7 @@ class Core
 
 		# How about the selected payload?
 		if (mod.exploit? and mod.datastore['PAYLOAD'])
-			p = framework.modules.create(mod.datastore['PAYLOAD'])
+			p = framework.payloads.create(mod.datastore['PAYLOAD'])
 			if (p and p.options.include?(opt))
 				res.concat(option_values_dispatch(p.options[opt], str, words))
 			end
@@ -2373,7 +2416,12 @@ class Core
 							res << addr
 						end
 					when 'LHOST'
-						res << Rex::Socket.source_address()
+						rh = self.active_module.datastore["RHOST"]
+						if rh and not rh.empty?
+							res << Rex::Socket.source_address(rh)
+						else
+							res << Rex::Socket.source_address()
+						end
 					else
 				end
 
@@ -2576,7 +2624,7 @@ protected
 		# If it's an exploit and a payload is defined, create it and
 		# display the payload's options
 		if (mod.exploit? and mod.datastore['PAYLOAD'])
-			p = framework.modules.create(mod.datastore['PAYLOAD'])
+			p = framework.payloads.create(mod.datastore['PAYLOAD'])
 
 			if (!p)
 				print_error("Invalid payload defined: #{mod.datastore['PAYLOAD']}\n")
@@ -2641,7 +2689,7 @@ protected
 		# If it's an exploit and a payload is defined, create it and
 		# display the payload's options
 		if (mod.exploit? and mod.datastore['PAYLOAD'])
-			p = framework.modules.create(mod.datastore['PAYLOAD'])
+			p = framework.payloads.create(mod.datastore['PAYLOAD'])
 
 			if (!p)
 				print_error("Invalid payload defined: #{mod.datastore['PAYLOAD']}\n")
@@ -2664,7 +2712,7 @@ protected
 		# If it's an exploit and a payload is defined, create it and
 		# display the payload's options
 		if (mod.exploit? and mod.datastore['PAYLOAD'])
-			p = framework.modules.create(mod.datastore['PAYLOAD'])
+			p = framework.payloads.create(mod.datastore['PAYLOAD'])
 
 			if (!p)
 				print_error("Invalid payload defined: #{mod.datastore['PAYLOAD']}\n")
@@ -2750,4 +2798,3 @@ end
 
 
 end end end end
-

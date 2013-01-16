@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -23,11 +19,11 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'           => 'VMWare Enumerate Active Sessions',
-			'Version'        => '$Revision$',
 			'Description'    => %Q{
-							This module will log into the Web API of VMWare and try to enumerate
-							all the login sessions.},
-			'Author'         => ['TheLightCosine <thelightcosine[at]metasploit.com>'],
+				This module will log into the Web API of VMWare and try to enumerate
+				all the login sessions.
+			},
+			'Author'         => ['theLightCosine'],
 			'License'        => MSF_LICENSE
 		)
 
@@ -37,7 +33,7 @@ class Metasploit3 < Msf::Auxiliary
 				OptString.new('USERNAME', [ true, "The username to Authenticate with.", 'root' ]),
 				OptString.new('PASSWORD', [ true, "The password to Authenticate with.", 'password' ])
 			], self.class)
-			
+
 		register_advanced_options([OptBool.new('SSL', [ false, 'Negotiate SSL for outgoing connections', true]),])
 	end
 
@@ -54,7 +50,7 @@ class Metasploit3 < Msf::Auxiliary
 				print_error "The Session is no longer Authenticated"
 			else
 				output = ''
-				vim_sessions.each do |vsession| 
+				vim_sessions.each do |vsession|
 					tmp_line = "Name: #{vsession['fullName']} \n\t"
 					is_active = vim_session_is_active(vsession['key'],vsession['userName'])
 					if is_active == :error
@@ -80,8 +76,4 @@ class Metasploit3 < Msf::Auxiliary
 		end
 	end
 
-
-
-
 end
-

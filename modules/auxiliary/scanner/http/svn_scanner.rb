@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -23,7 +19,6 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'HTTP Subversion Scanner',
-			'Version'     => '$Revision$',
 			'Description' => 'Detect subversion directories and files and analize its content. Only SVN Version > 7 supported',
 			'Author'       => ['et'],
 			'License'     => MSF_LICENSE
@@ -54,7 +49,7 @@ class Metasploit3 < Msf::Auxiliary
 		ecode = nil
 		emesg = nil
 
-		tpath = datastore['PATH']
+		tpath = normalize_uri(datastore['PATH'])
 		if tpath[-1,1] != '/'
 			tpath += '/'
 		end
@@ -129,7 +124,7 @@ class Metasploit3 < Msf::Auxiliary
 					:port	=> rport,
 					:vhost  => vhost,
 					:ssl    => ssl,
-					:path	=> "#{turl}",
+					:path	=> turl,
 					:method => 'GET',
 					:pname  => "",
 					:proof  => "Res code: #{res.code.to_s}",
@@ -176,7 +171,7 @@ class Metasploit3 < Msf::Auxiliary
 							:sname => (ssl ? 'https' : 'http'),
 							:port	=> rport,
 							:type	=> 'USERNAME',
-							:data	=> "#{slastauthor}",
+							:data	=> slastauthor,
 							:update => :unique_data
 						)
 
@@ -190,7 +185,7 @@ class Metasploit3 < Msf::Auxiliary
 								:sname => (ssl ? 'https' : 'http'),
 								:port	=> rport,
 								:type	=> 'DIRECTORY',
-								:data	=> "#{sname}",
+								:data	=> sname,
 								:update => :unique_data
 							)
 						end
@@ -202,7 +197,7 @@ class Metasploit3 < Msf::Auxiliary
 								:sname => (ssl ? 'https' : 'http'),
 								:port	=> rport,
 								:type	=> 'FILE',
-								:data	=> "#{sname}",
+								:data	=> sname,
 								:update => :unique_data
 							)
 
@@ -221,7 +216,7 @@ class Metasploit3 < Msf::Auxiliary
 
 									if srcres and srcres.body.length > 0
 										if datastore['SHOW_SOURCE']
-											print_status("#{srcres.body}")
+											print_status(srcres.body)
 										end
 
 										report_note(
@@ -250,4 +245,3 @@ class Metasploit3 < Msf::Auxiliary
 		end
 	end
 end
-

@@ -1,3 +1,4 @@
+# -*- coding: binary -*-
 require 'rex/post/meterpreter'
 require 'rex/parser/arguments'
 
@@ -43,11 +44,9 @@ class Console::CommandDispatcher::Core
 			"close"      => "Closes a channel",
 			"channel"    => "Displays information about active channels",
 			"exit"       => "Terminate the meterpreter session",
-			"detach"     => "Detach the meterpreter session (for http/https)",
 			"help"       => "Help menu",
 			"interact"   => "Interacts with a channel",
 			"irb"        => "Drop into irb scripting mode",
-			"migrate"    => "Migrate the server to another process",
 			"use"        => "Deprecated alias for 'load'",
 			"load"       => "Load one or more meterpreter extensions",
 			"quit"       => "Terminate the meterpreter session",
@@ -61,6 +60,18 @@ class Console::CommandDispatcher::Core
 			"enable_unicode_encoding"  => "Enables encoding of unicode strings",
 			"disable_unicode_encoding" => "Disables encoding of unicode strings"
 		}
+
+		if client.passive_service
+			c["detach"] = "Detach the meterpreter session (for http/https)"
+		end
+		# The only meterp that implements this right now is native Windows and for
+		# whatever reason it is not adding core_migrate to its list of commands.
+		# Use a dumb platform til it gets sorted.
+		#if client.commands.include? "core_migrate"
+		if client.platform =~ /win/
+			c["migrate"] = "Migrate the server to another process"
+		end
+
 		if (msf_loaded?)
 			c["info"] = "Displays information about a Post module"
 		end
@@ -117,7 +128,6 @@ class Console::CommandDispatcher::Core
 
 		mode = nil
 		chan = nil
-		data = []
 
 		# Parse options
 		@@channel_opts.parse(args) { |opt, idx, val|
@@ -318,8 +328,10 @@ class Console::CommandDispatcher::Core
 	#
 	# Migrates the server to the supplied process identifier.
 	#
+	# @param args [Array<String>] Commandline arguments, only -h or a pid
+	# @return [void]
 	def cmd_migrate(*args)
-		if (args.length == 0)
+		if ( args.length == 0 or args.include?("-h") )
 			cmd_migrate_help
 			return true
 		end
@@ -352,8 +364,6 @@ class Console::CommandDispatcher::Core
 		if (args.length == 0)
 			args.unshift("-h")
 		end
-
-		modules = nil
 
 		@@load_opts.parse(args) { |opt, idx, val|
 			case opt
@@ -485,14 +495,18 @@ class Console::CommandDispatcher::Core
 			# Framework instance.  If we don't, or if no such module exists,
 			# fall back to using the scripting interface.
 			if (msf_loaded? and mod = client.framework.modules.create(script_name))
-				omod = mod
-				mod = client.framework.modules.reload_module(mod)
-				if (not mod)
-					print_error("Failed to reload module: #{client.framework.modules.failed[omod.file_path]}")
+				original_mod = mod
+				reloaded_mod = client.framework.modules.reload_module(original_mod)
+
+				unless reloaded_mod
+					error = client.framework.modules.module_load_error_by_path[original_mod.file_path]
+					print_error("Failed to reload module: #{error}")
+
 					return
 				end
+
 				opts = (args + [ "SESSION=#{client.sid}" ]).join(',')
-				mod.run_simple(
+				reloaded_mod.run_simple(
 					#'RunAsJob' => true,
 					'LocalInput'  => shell.input,
 					'LocalOutput' => shell.output,
@@ -676,8 +690,7 @@ class Console::CommandDispatcher::Core
 		}
 
 		# Find the channel associated with this cid, assuming the cid is valid.
-		if ((!cid) or
-		    (!(channel = client.find_channel(cid))))
+		if ((!cid) or (!(channel = client.find_channel(cid))))
 			print_error("Invalid channel identifier specified.")
 			return true
 		end
@@ -846,8 +859,8 @@ protected
 
 	def tab_complete_postmods
 		tabs = client.framework.modules.post.map { |name,klass|
-			mod = klass.new
-			if mod.session_compatible?(client)
+			mod = client.framework.modules.post.create(name)
+			if mod and mod.session_compatible?(client)
 				mod.fullname.dup
 			else
 				nil

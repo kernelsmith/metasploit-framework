@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -22,12 +18,11 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'VMWare Authentication Daemon Version Scanner',
-			'Version'     => '$Revision$',
 			'Description' => %q{
 				This module will identify information about a host through the
 			vmauthd service.
 			},
-			'Author'      => ['TheLightCosine <thelightcosine[at]metasploit.com>', 'hdm'],
+			'Author'      => ['theLightCosine', 'hdm'],
 			'License'     => MSF_LICENSE
 		)
 
@@ -97,7 +92,7 @@ class Metasploit3 < Msf::Auxiliary
 			return ret_msg
 		end
 		nsock.put("PASS #{pass}\r\n")
-		res = nsock.get_once
+		res = nsock.get_once || ''
 		if res.start_with? "530"
 			return :failed
 		elsif res.start_with? "230"
@@ -132,4 +127,3 @@ class Metasploit3 < Msf::Auxiliary
 
 
 end
-

@@ -1,6 +1,3 @@
-# $Id$
-##
-
 ##
 # ## This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
@@ -12,6 +9,7 @@ require 'msf/core'
 require 'rex'
 require 'msf/core/post/common'
 require 'msf/core/post/file'
+require 'msf/core/post/unix'
 require 'msf/core/post/linux/priv'
 require 'msf/core/post/linux/system'
 
@@ -33,7 +31,6 @@ class Metasploit3 < Msf::Post
 				},
 				'License'       => MSF_LICENSE,
 				'Author'        => [ 'todb <todb[at]metasploit.com>'],
-				'Version'       => '$Revision: $',
 				'Platform'      => [ 'linux','unix','osx','solaris','aix' ],
 				'References'    =>
 					[

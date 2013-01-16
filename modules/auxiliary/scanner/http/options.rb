@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -23,7 +19,6 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'HTTP Options Detection',
-			'Version'     => '$Revision$',
 			'Description' => 'Display available HTTP options for each system',
 			'Author'       => ['CG'],
 			'License'     => MSF_LICENSE,
@@ -67,8 +62,8 @@ class Metasploit3 < Msf::Auxiliary
 						:port	=> rport,
 						:proto => 'tcp',
 						:sname => (ssl ? 'https' : 'http'),
-						:name	=> self.fullname,
-						:info	=> res.headers['Allow'],
+						:name	=> "HTTP Trace Method Allowed",
+						:info	=> "Module #{self.fullname} detected TRACE access through the Allow header: #{res.headers['Allow']}",
 						:refs   => self.references,
 						:exploited_at => Time.now.utc
 					)
@@ -80,4 +75,3 @@ class Metasploit3 < Msf::Auxiliary
 		end
 	end
 end
-

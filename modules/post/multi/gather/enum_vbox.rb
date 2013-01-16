@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -28,16 +24,15 @@ class Metasploit3 < Msf::Post
 								for the current user, thereforce, this module needs to be invoked from a user context.
 								},
 			'License'        => MSF_LICENSE,
-			'Author'         => ['TheLightCosine <thelightcosine[at]metasploit.com>'],
-			'Version'        => '$Revision$',
-			'Platform'       => ['unix', 'bsd', 'linux', 'osx', 'windows'],
+			'Author'         => ['theLightCosine'],
+			'Platform'       => ['unix', 'bsd', 'linux', 'osx', 'win'],
 			'SessionTypes'   => ['shell', 'meterpreter' ]
 		))
 	end
 
 	def run
 		if session.platform =~ /win/
-			res = session.shell_command_token_win32('"c:\Program Files\Oracle\VirtualBox\vboxmanage" list -l vms')
+			res = session.shell_command_token_win32('"c:\Program Files\Oracle\VirtualBox\vboxmanage" list -l vms') || ''
 			if res.include? "The system cannot find the path specified"
 				print_error "VirtualBox does not appear to be installed on this machine"
 				return nil

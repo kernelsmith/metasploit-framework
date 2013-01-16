@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -35,7 +31,6 @@ class Metasploit3 < Msf::Auxiliary
 			},
 			'Author'		=> [ 'hdm' ],
 			'License'		=> MSF_LICENSE,
-			'Version'		=> '$Revision$',
 			'References'	=>
 				[
 					[ 'BID', '1846'],
@@ -73,8 +68,8 @@ class Metasploit3 < Msf::Auxiliary
 						:host	=> rhost,
 						:port	=> rport,
 						:proto  => 'tcp',
-						:name	=> self.fullname,
-						:info	=> "http://#{rhost}:#{rport}/exec/show/version/CR",
+						:name	=> self.name,
+						:info	=> "Module #{self.fullname} successfully accessed http://#{rhost}:#{rport}/exec/show/version/CR",
 						:refs   => self.references,
 						:exploited_at => Time.now.utc
 					}
@@ -100,4 +95,3 @@ class Metasploit3 < Msf::Auxiliary
 	end
 
 end
-

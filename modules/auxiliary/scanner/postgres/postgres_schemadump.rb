@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -22,16 +18,16 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'           => 'Postgres Schema Dump',
-			'Version'        => '$Revision$',
 			'Description'    => %Q{
 					This module extracts the schema information from a
 					Postgres server.
 			},
-			'Author'         => ['TheLightCosine <thelightcosine[at]gmail.com>'],
+			'Author'         => ['theLightCosine'],
 			'License'        => MSF_LICENSE
 		)
 		register_options([
 			OptString.new('DATABASE', [ true, 'The database to authenticate against', 'postgres']),
+			OptBool.new('DISPLAY_RESULTS', [true, "Display the Results to the Screen", true])
 			])
 		deregister_options('SQL', 'RETURN_ROWSET', 'VERBOSE')
 
@@ -58,7 +54,7 @@ class Metasploit3 < Msf::Auxiliary
 					:proto => 'tcp'
 					)
 		store_loot('postgres_schema', "text/plain", datastore['RHOST'], output, "#{datastore['RHOST']}_postgres_schema.txt", "Postgres SQL Schema", this_service)
-		print_good output
+		print_good output if datastore['DISPLAY_RESULTS']
 	end
 
 	def get_schema
@@ -121,4 +117,3 @@ class Metasploit3 < Msf::Auxiliary
 
 
 end
-

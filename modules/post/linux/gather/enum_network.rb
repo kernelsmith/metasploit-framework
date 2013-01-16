@@ -9,6 +9,7 @@ require 'msf/core'
 require 'rex'
 require 'msf/core/post/common'
 require 'msf/core/post/file'
+require 'msf/core/post/linux/priv'
 require 'msf/core/post/linux/system'
 
 class Metasploit3 < Msf::Post
@@ -32,7 +33,6 @@ class Metasploit3 < Msf::Post
 						'ohdae <bindshell[at]live.com>', # minor additions, modifications & testing
 						'Stephen Haywood <averagesecurityguy[at]gmail.com>', # enum_linux
 					],
-				'Version'       => '$Revision$',
 				'Platform'      => [ 'linux' ],
 				'SessionTypes'  => [ 'shell' ]
 			))

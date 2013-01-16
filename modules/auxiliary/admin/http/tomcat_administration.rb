@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -20,7 +16,6 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'Tomcat Administration Tool Default Access',
-			'Version'     => '$Revision$',
 			'Description' => 'Detect the Tomcat administration interface.',
 			'References'  =>
 				[
@@ -96,7 +91,7 @@ class Metasploit3 < Msf::Auxiliary
 									'data'         => post_data,
 								}, 25)
 
-								if (res.code == 302)
+								if (res and res.code == 302)
 
 									res = send_request_cgi({
 										'uri'     => "/admin/",
@@ -104,7 +99,7 @@ class Metasploit3 < Msf::Auxiliary
 										'cookie'  => "JSESSIONID=#{jsessionid}",
 									}, 25)
 
-									if (res.code == 302)
+									if (res and res.code == 302)
 
 										res = send_request_cgi({
 											'uri'     => "/admin/frameset.jsp",
@@ -112,7 +107,7 @@ class Metasploit3 < Msf::Auxiliary
 											'cookie'  => "JSESSIONID=#{jsessionid}",
 										}, 25)
 
-										if (res.code == 200)
+										if (res and res.code == 200)
 											print_status("http://#{target_host}:#{rport}/admin [#{res.headers['Server']}] [#{ver}] [Tomcat Server Administration] [#{username}/#{password}]")
 										end
 

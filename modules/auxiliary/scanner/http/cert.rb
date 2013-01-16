@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -21,7 +17,6 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'HTTP SSL Certificate Checker',
-			'Version'     => '$Revision$',
 			'Author'      => 'nebulus',
 			'License'     => MSF_LICENSE,
 			'Description' => %q{
@@ -46,7 +41,7 @@ class Metasploit3 < Msf::Auxiliary
 	# Fingerprint a single host
 	def run_host(ip)
 
-		connect
+		connect(true, {"SSL" => true}) #Force SSL
 		cert  = OpenSSL::X509::Certificate.new(sock.peer_cert)
 		disconnect
 

@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -24,9 +20,10 @@ class Metasploit3 < Msf::Auxiliary
 		super(
 			'Name'           => 'VMWare Enumerate Virtual Machines',
 			'Description'    => %Q{
-							This module attempts to discover virtual machines on any VMWare instance
-							running the web interface. This would include ESX/ESXi and VMWare Server.},
-			'Author'         => ['TheLightCosine <thelightcosine[at]metasploit.com>'],
+				This module attempts to discover virtual machines on any VMWare instance
+				running the web interface. This would include ESX/ESXi and VMWare Server.
+			},
+			'Author'         => ['theLightCosine'],
 			'License'        => MSF_LICENSE
 		)
 
@@ -37,7 +34,7 @@ class Metasploit3 < Msf::Auxiliary
 				OptString.new('PASSWORD', [ true, "The password to Authenticate with.", 'password' ]),
 				OptBool.new('SCREENSHOT', [true, "Wheter or not to try to take a screenshot", true])
 			], self.class)
-			
+
 		register_advanced_options([OptBool.new('SSL', [ false, 'Negotiate SSL for outgoing connections', true]),])
 	end
 
@@ -45,7 +42,7 @@ class Metasploit3 < Msf::Auxiliary
 
 		if vim_do_login(datastore['USERNAME'], datastore['PASSWORD']) == :success
 			virtual_machines = vim_get_vms
-			virtual_machines.each do |vm| 
+			virtual_machines.each do |vm|
 				print_good YAML.dump(vm)
 				report_note(
 					:host  => rhost,
@@ -83,9 +80,4 @@ class Metasploit3 < Msf::Auxiliary
 		end
 	end
 
-
-
-
-
 end
-

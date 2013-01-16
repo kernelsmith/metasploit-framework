@@ -1,3 +1,4 @@
+# -*- coding: binary -*-
 require 'rex/socket'
 require 'rex/proto/http'
 require 'rex/text'
@@ -9,8 +10,8 @@ module Http
 ###
 #
 # Acts as a client to an HTTP server, sending requests and receiving responses.
-# 
-# See the RFC: http://www.w3.org/Protocols/rfc2616/rfc2616.html 
+#
+# See the RFC: http://www.w3.org/Protocols/rfc2616/rfc2616.html
 #
 ###
 class Client
@@ -145,6 +146,11 @@ class Client
 		c_conn = opts['connection']
 		c_auth = opts['basic_auth'] || config['basic_auth'] || ''
 
+		# An agent parameter was specified, but so was a header, prefer the header
+		if c_ag and c_head.keys.map{|x| x.downcase }.include?('user-agent')
+			c_ag = nil
+		end
+		
 		uri    = set_uri(c_uri)
 
 		req = ''
@@ -163,6 +169,7 @@ class Client
 		req << set_version(c_prot, c_vers)
 		req << set_host_header(c_host)
 		req << set_agent_header(c_ag)
+
 
 		if (c_auth.length > 0)
 			req << set_basic_auth_header(c_auth)
@@ -188,7 +195,8 @@ class Client
 	# - cookie:        Cookie header value
 	# - ctype:         Content-Type header value, default: +application/x-www-form-urlencoded+
 	# - data:          HTTP data (only useful with some methods, see rfc2616)
-	# - encode:        URI encode the supplied URI
+	# - encode:        URI encode the supplied URI, default: false
+	# - encode_params: URI encode the GET or POST variables (names and values), default: true
 	# - headers:       HTTP headers as a hash, e.g. <code>{ "X-MyHeader" => "value" }</code>
 	# - method:        HTTP method to use in the request, not limited to standard methods defined by rfc2616, default: GET
 	# - proto:         protocol, default: HTTP
@@ -201,28 +209,28 @@ class Client
 	# - vhost:         Host header value
 	#
 	def request_cgi(opts={})
-		c_enc  = opts['encode']     || false
-		c_cgi  = opts['uri']        || '/'
-		c_body = opts['data']       || ''
-		c_meth = opts['method']     || 'GET'
-		c_prot = opts['proto']      || 'HTTP'
-		c_vers = opts['version']    || config['version'] || '1.1'
-		c_qs   = opts['query']      || ''
-		c_varg = opts['vars_get']   || {}
-		c_varp = opts['vars_post']  || {}
-		c_head = opts['headers']    || config['headers'] || {}
-		c_rawh = opts['raw_headers']|| config['raw_headers'] || ''
-		c_type = opts['ctype']      || 'application/x-www-form-urlencoded'
-		c_ag   = opts['agent']      || config['agent']
-		c_cook = opts['cookie']     || config['cookie']
-		c_host = opts['vhost']      || config['vhost']
-		c_conn = opts['connection']
-		c_path = opts['path_info']
-		c_auth = opts['basic_auth'] || config['basic_auth'] || ''
-
-		uri    = set_cgi(c_cgi)
-		qstr   = c_qs
-		pstr   = c_body
+		c_enc   = opts['encode']      || false
+		c_enc_p = (opts['encode_params'] == true or opts['encode_params'].nil? ? true : false)
+		c_cgi   = opts['uri']         || '/'
+		c_body  = opts['data']        || ''
+		c_meth  = opts['method']      || 'GET'
+		c_prot  = opts['proto']       || 'HTTP'
+		c_vers  = opts['version']     || config['version'] || '1.1'
+		c_qs    = opts['query']       || ''
+		c_varg  = opts['vars_get']    || {}
+		c_varp  = opts['vars_post']   || {}
+		c_head  = opts['headers']     || config['headers'] || {}
+		c_rawh  = opts['raw_headers'] || config['raw_headers'] || ''
+		c_type  = opts['ctype']       || 'application/x-www-form-urlencoded'
+		c_ag    = opts['agent']       || config['agent']
+		c_cook  = opts['cookie']      || config['cookie']
+		c_host  = opts['vhost']       || config['vhost']
+		c_conn  = opts['connection']
+		c_path  = opts['path_info']
+		c_auth  = opts['basic_auth']  || config['basic_auth'] || ''
+		uri     = set_cgi(c_cgi)
+		qstr    = c_qs
+		pstr    = c_body
 
 		if (config['pad_get_params'])
 			1.upto(config['pad_get_params_count'].to_i) do |i|
@@ -235,25 +243,27 @@ class Client
 
 		c_varg.each_pair do |var,val|
 			qstr << '&' if qstr.length > 0
-			qstr << set_encode_uri(var)
+			qstr << (c_enc_p ? set_encode_uri(var) : var) 
 			qstr << '='
-			qstr << set_encode_uri(val)
+			qstr << (c_enc_p ? set_encode_uri(val) : val)
 		end
 
 		if (config['pad_post_params'])
 			1.upto(config['pad_post_params_count'].to_i) do |i|
-				pstr << '&' if qstr.length > 0
-				pstr << set_encode_uri(Rex::Text.rand_text_alphanumeric(rand(32)+1))
+				rand_var = Rex::Text.rand_text_alphanumeric(rand(32)+1)
+				rand_val = Rex::Text.rand_text_alphanumeric(rand(32)+1)
+				pstr << '&' if pstr.length > 0
+				pstr << (c_enc_p ? set_encode_uri(rand_var) : rand_var)
 				pstr << '='
-				pstr << set_encode_uri(Rex::Text.rand_text_alphanumeric(rand(32)+1))
+				pstr << (c_enc_p ? set_encode_uri(rand_val) : rand_val)
 			end
 		end
 
 		c_varp.each_pair do |var,val|
 			pstr << '&' if pstr.length > 0
-			pstr << set_encode_uri(var)
+			pstr << (c_enc_p ? set_encode_uri(var) : var)
 			pstr << '='
-			pstr << set_encode_uri(val)
+			pstr << (c_enc_p ? set_encode_uri(val) : val)
 		end
 
 		req = ''
@@ -355,7 +365,7 @@ class Client
 	#
 	# Read a response from the server
 	#
-	def read_response(t = -1)
+	def read_response(t = -1, opts = {})
 
 		resp = Response.new
 		resp.max_data = config['read_max_data']
@@ -379,10 +389,10 @@ class Client
 
 					buff = conn.get_once(-1, 1)
 					rv   = resp.parse( buff || '' )
-		
+
 				##########################################################################
 				# XXX: NOTE: BUG: get_once currently (as of r10042) rescues "Exception"
-				# As such, the following rescue block will ever be reached.  -jjd
+				# As such, the following rescue block will never be reached.  -jjd
 				##########################################################################
 
 				# Handle unexpected disconnects
@@ -424,14 +434,20 @@ class Client
 		return resp if not resp
 
 		# As a last minute hack, we check to see if we're dealing with a 100 Continue here.
-		if resp.proto == '1.1' and resp.code == 100
-			# If so, our real response becaome the body, so we re-parse it.
-			body = resp.body
-			resp = Response.new
-			resp.max_data = config['read_max_data']
-			rv = resp.parse(body)
-			# XXX: At some point, this may benefit from processing post-completion code
-			# as seen above.
+		# Most of the time this is handled by the parser via check_100()
+		if resp.proto == '1.1' and resp.code == 100 and not opts[:skip_100]
+			# Read the real response from the body if we found one
+			# If so, our real response became the body, so we re-parse it.
+			if resp.body.to_s =~ /^HTTP/
+				body = resp.body
+				resp = Response.new
+				resp.max_data = config['read_max_data']
+				rv = resp.parse(body)
+			# We found a 100 Continue but didn't read the real reply yet
+			# Otherwise reread the reply, but don't try this hack again
+			else
+				resp = read_response(t, :skip_100 => true)
+			end
 		end
 
 		resp
@@ -687,17 +703,17 @@ class Client
 	def set_host_header(host=nil)
 		return "" if self.config['uri_full_url']
 		host ||= self.config['vhost']
-		
+
 		# IPv6 addresses must be placed in brackets
 		if Rex::Socket.is_ipv6?(host)
 			host = "[#{host}]"
 		end
-		
+
 		# The port should be appended if non-standard
 		if not [80,443].include?(self.port)
 			host = host + ":#{port}"
 		end
-		
+
 		set_formatted_header("Host", host)
 	end
 

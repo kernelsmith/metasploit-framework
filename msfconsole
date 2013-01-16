@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+# -*- coding: binary -*-
 #
 # $Id$
 #
@@ -15,6 +16,7 @@ end
 
 $:.unshift(File.expand_path(File.join(File.dirname(msfbase), 'lib')))
 require 'fastlib'
+require 'msfenv'
 
 
 
@@ -33,7 +35,9 @@ class OptsConsole
 	# Return a hash describing the options.
 	#
 	def self.parse(args)
-		options = {}
+		options = {
+			'DeferModuleLoads' => true
+		}
 
 		opts = OptionParser.new do |opts|
 			opts.banner = "Usage: msfconsole [options]"
@@ -71,6 +75,11 @@ class OptsConsole
 				options['DatabaseYAML'] = m
 			end
 
+			opts.on("-M", "--migration-path <dir>", "Specify a directory containing additional DB migrations") do |m|
+				options['DatabaseMigrationPaths'] ||= []
+				options['DatabaseMigrationPaths'] << m
+			end
+			
 			opts.on("-e", "--environment <production|development>", "Specify the database environment to load from the YAML") do |m|
 				options['DatabaseEnv'] = m
 			end
@@ -90,6 +99,11 @@ class OptsConsole
 
 			opts.on("-q", "--quiet", "Do not print the banner on start up") do |v|
 				options['DisableBanner'] = true
+			end
+
+			opts.on("-x", "-x <command>", "Execute the specified string as console commands (use ; for multiples)") do |s|
+				options['XCommands'] ||= []
+				options['XCommands'] += s.split(/\s*;\s*/)
 			end
 
 			opts.separator ""
