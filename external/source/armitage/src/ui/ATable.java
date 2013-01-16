@@ -14,6 +14,7 @@ public class ATable extends JTable {
 
 	public static TableCellRenderer getDefaultTableRenderer(final JTable table, final TableModel model) {
 		final Set specialitems = new HashSet();
+		specialitems.add("Wordlist");
 		specialitems.add("PAYLOAD");
 		specialitems.add("RHOST");
 		specialitems.add("RHOSTS");
@@ -24,6 +25,7 @@ public class ATable extends JTable {
 		specialitems.add("SigningCert");
 		specialitems.add("WORDLIST");
 		specialitems.add("SESSION");
+		specialitems.add("REXE");
 
 		return new TableCellRenderer() {
 			public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column)  {

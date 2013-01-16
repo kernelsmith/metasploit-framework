@@ -152,7 +152,10 @@ sub createConsoleTab {
 
 sub setg {
 	%MSF_GLOBAL[$1] = $2;
-	call_async($client, "core.setg", $1, $2);
+	local('$c');
+	$c = createConsole($client);
+	call_async($client, "console.write", $c, "setg $1 $2 $+ \n");
+	call_async($client, "console.release", $c);
 }
 
 sub createDefaultHandler {
@@ -291,6 +294,11 @@ sub startMetasploit {
 					[System exit: 0];
 				}
 
+				# if the user chooses c:\metasploit AND we're in the 4.5 environment... adjust
+				if (-exists getFileProper($msfdir, "apps", "pro", "msf3")) {
+					$msfdir = getFileProper($msfdir, "apps", "pro");
+				}
+
 				if (charAt($msfdir, -1) ne "\\") {
 					$msfdir = "$msfdir $+ \\";
 				}
@@ -398,16 +406,23 @@ sub connectDialog {
 	[$dialog add: center($button, $help), [BorderLayout SOUTH]];
 
 	[$button addActionListener: lambda({
-		[$dialog setVisible: 0];
-		connectToMetasploit([$host getText], [$port getText], [$user getText], [$pass getText]);
+		local('$h $p $u $s @o');
 
-		if ([$host getText] eq "127.0.0.1") {
+		# clean up the user options...
+		@o = @([$host getText], [$port getText], [$user getText], [$pass getText]);
+		@o = map({ return ["$1" trim]; }, @o);
+		($h, $p, $u, $s) = @o;
+
+		[$dialog setVisible: 0];
+		connectToMetasploit($h, $p, $u, $s);
+
+		if ($h eq "127.0.0.1" || $h eq "localhost") {
 			try {
-				closef(connect("127.0.0.1", [$port getText], 1000));
+				closef(connect("127.0.0.1", $p, 1000));
 			}
 			catch $ex {
 				if (!askYesNo("A Metasploit RPC server is not running or\nnot accepting connections yet. Would you\nlike me to start Metasploit's RPC server\nfor you?", "Start Metasploit?")) {
-					startMetasploit([$user getText], [$pass getText], [$port getText]);
+					startMetasploit($u, $s, $p);
 				}
 			}
 		}
@@ -460,6 +475,15 @@ sub _module_execute {
 		}
 		else {
 			$host = "all";
+		}
+
+		# fix SMBPass and PASSWORD options if necessary...
+		if ("PASSWORD" in $3) {
+			$3['PASSWORD'] = fixPass($3['PASSWORD']);
+		}
+
+		if ("SMBPass" in $3) {
+			$3['SMBPass'] = fixPass($3['SMBPass']);
 		}
 
 		# okie then, let's create a console and execute all of this stuff...	
@@ -597,3 +621,8 @@ sub initConsolePool {
 	[$client addHook: "console.release", $pool];
 	[$client addHook: "console.release_and_destroy", $pool];
 }
+
+sub fixPass {
+	return replace(strrep($1, '\\', '\\\\'), '(\p{Punct})', '\\\\$1');
+}
+

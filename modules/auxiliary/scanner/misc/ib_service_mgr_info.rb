@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -29,10 +25,9 @@ class Metasploit3 < Msf::Auxiliary
 				and implementation of the InterBase server from InterBase
 				Services Manager.
 			},
-			'Version'	=> '$Revision$',
 			'Author'	=>
 				[
-					'ramon',
+					'Ramon de C Valle',
 					'Adriano Lima <adriano[at]risesecurity.org>',
 				],
 			'License'	=> MSF_LICENSE

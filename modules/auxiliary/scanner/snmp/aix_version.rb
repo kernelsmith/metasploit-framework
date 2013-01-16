@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -21,12 +17,11 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'        => 'AIX SNMP Scanner Auxiliary Module',
-			'Version'     => '$Revision$',
 			'Description' => 'AIX SNMP Scanner Auxiliary Module',
 			'Author'      =>
 				[
+					'Ramon de C Valle',
 					'Adriano Lima <adriano[at]risesecurity.org>',
-					'ramon'
 				],
 			'License'     => MSF_LICENSE
 		)
@@ -70,11 +65,14 @@ class Metasploit3 < Msf::Auxiliary
 				print_status(status)
 			end
 
-			disconnect_snmp
-
+		# No need to make noise about timeouts
+		rescue ::Rex::ConnectionError, ::SNMP::RequestTimeout, ::SNMP::UnsupportedVersion
+		rescue ::Interrupt
+			raise $!
 		rescue Exception => e
-			print_error("#{e.class}, #{e.message}")
-
+			print_error("#{ip} #{e.class}, #{e.message}")
+		ensure
+			disconnect_snmp
 		end
 
 	end

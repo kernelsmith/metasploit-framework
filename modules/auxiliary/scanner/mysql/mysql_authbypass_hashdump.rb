@@ -1,8 +1,4 @@
 ##
-# $Id$
-##
-
-##
 # This file is part of the Metasploit Framework and may be subject to
 # redistribution and commercial restrictions. Please see the Metasploit
 # web site for more information on licensing and terms of use.
@@ -21,19 +17,19 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize
 		super(
 			'Name'           => 'MySQL Authentication Bypass Password Dump',
-			'Version'        => '$Revision$',
 			'Description'    => %Q{
 					This module exploits a password bypass vulnerability in MySQL in order
 				to extract the usernames and encrypted password hashes from a MySQL server.
 				These hashes ares stored as loot for later cracking.
 			},
 			'Author'        => [
-					'TheLightCosine <thelightcosine[at]metasploit.com>', # Original hashdump module
+					'theLightCosine', # Original hashdump module
 					'jcran'                                              # Authentication bypass bruteforce implementation
 				],
 			'References'     => [
 					['CVE', '2012-2122'],
-					['OSVDB', '82804']
+					['OSVDB', '82804'],
+					['URL', 'https://community.rapid7.com/community/metasploit/blog/2012/06/11/cve-2012-2122-a-tragically-comedic-security-flaw-in-mysql']
 				],
 			'DisclosureDate' => 'Jun 09 2012',
 			'License'        => MSF_LICENSE

