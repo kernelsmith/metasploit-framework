@@ -1,0 +1,18 @@
+--- !ruby/object:Faq
+title: !binary |-
+  dGVzdHRpdGxl
+description: !binary |-
+  dGVzdGRlc2M=
+tags:
+- !binary |-
+  dGFnMQ==
+- !binary |-
+  dGFnMg==
+--- !ruby/object:Faq
+title: How to avoid AV
+description: Go read other people's blogs you moron
+tags:
+- meterpreter
+- AV
+- avoid
+- anti-virus
