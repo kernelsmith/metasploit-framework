@@ -8,16 +8,16 @@ tags:
 - anti-virus
 --- !ruby/object:Faq
 title: "stages & stagers"
-description: "<platform>/<stage>/<stager> is the general format of payloads on the filesystem.  If it doesn't have a /<stager> at the end then it's a single (i.e. it is not staged)\nFYI, there is no non-staged windows meterpreter at the moment"
+description: "<platform>/<stage>/<stager> is the general format of payloads \non the filesystem.  If it doesn't have a /<stager> at the end then it's\na single (i.e. it is not staged)\n\nFYI, there is no non-staged windows meterpreter at the moment"
 tags:
--stages
--stager
--payloads
--meterpreter
+- stages
+- stager
+- payloads
+- meterpreter
 --- !ruby/object:Faq
 title: "YARD documentation"
-description: "Wrap at 80, use the following format\n#\ndescription of the method\n# @param name [Type] Description of the argument\n# @param name [Array<String> Description of the argument, where arg is an array of strings\n# @return [Type] Optional description of return value"
+description: "Wrap at 80, use the following format\n#\n# Description of the method\n# @param name [Type] Description of the argument\n# @param name [Array<String>] Description of the argument, where arg is an array of strings\n# @return [Type] Optional description of return value"
 tags:
--documentation
--YARD
--yard
+- documentation
+- YARD
+- yard
