@@ -1,14 +1,4 @@
 --- !ruby/object:Faq
-title: !binary |-
-  dGVzdHRpdGxl
-description: !binary |-
-  dGVzdGRlc2M=
-tags:
-- !binary |-
-  dGFnMQ==
-- !binary |-
-  dGFnMg==
---- !ruby/object:Faq
 title: How to avoid AV
 description: Go read other people's blogs you moron
 tags:
@@ -16,3 +6,18 @@ tags:
 - AV
 - avoid
 - anti-virus
+--- !ruby/object:Faq
+title: "stages & stagers"
+description: "<platform>/<stage>/<stager> is the general format of payloads on the filesystem.  If it doesn't have a /<stager> at the end then it's a single (i.e. it is not staged)\nFYI, there is no non-staged windows meterpreter at the moment"
+tags:
+-stages
+-stager
+-payloads
+-meterpreter
+--- !ruby/object:Faq
+title: "YARD documentation"
+description: "Wrap at 80, use the following format\n#\ndescription of the method\n# @param name [Type] Description of the argument\n# @param name [Array<String> Description of the argument, where arg is an array of strings\n# @return [Type] Optional description of return value"
+tags:
+-documentation
+-YARD
+-yard
