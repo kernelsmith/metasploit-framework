@@ -47,6 +47,21 @@ module CommandDispatcher
 	end
 
 	#
+	# Returns the previously loaded module if one has been previously selected, otherwise
+	# nil is returned.
+	#
+	def previous_module
+		driver.previous_module
+	end
+
+	#
+	# Sets the previous module for this driver instance.
+	#
+	def previous_module=(mod)
+		driver.previous_module = mod
+	end
+
+	#
 	# Returns the active session if one has been selected, otherwise nil is
 	# returned.
 	#

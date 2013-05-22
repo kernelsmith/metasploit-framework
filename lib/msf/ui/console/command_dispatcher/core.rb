@@ -149,7 +149,6 @@ class Core
 
 		@dscache = {}
 		@cache_payloads = nil
-		@previous_module = nil
 		@module_name_stack = []
 	end
 
@@ -2317,12 +2316,12 @@ class Core
 		end
 
 		# If there's currently an active module, enqueque it and go back
-		if (active_module)
-			@previous_module = active_module
+		if active_module
+			self.previous_module = active_module
 			cmd_back()
 		end
 
-		if (dispatcher != nil)
+		unless dispatcher == nil
 			driver.enstack_dispatcher(dispatcher)
 		end
 
@@ -2347,8 +2346,8 @@ class Core
 	# Command to take to the previously active module
 	#
 	def cmd_previous()
-		if @previous_module
-			self.cmd_use(@previous_module.fullname)
+		if previous_module
+			cmd_use(previous_module.fullname)
 		else
 			print_error("There isn't a previous module at the moment")
 		end
