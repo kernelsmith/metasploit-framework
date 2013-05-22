@@ -392,9 +392,18 @@ class Driver < Msf::Ui::Driver
 
 		# If we have configuration, process it
 		if (conf.group?(ConfigGroup))
+			# need to process previousmodule before activemodule, so check for it
+			if conf[ConfigGroup].has_key?('PreviousModule')
+				print_status "Setting previous module #{conf[ConfigGroup]['PreviousModule']}"
+				#previous_module = conf[ConfigGroup]['PreviousModule']
+				run_single("use #{conf[ConfigGroup]['PreviousModule']}")
+			end
+			print_status "Sleeping for a sec"
+			select(nil,nil,nil,1)
 			conf[ConfigGroup].each_pair { |k, v|
 				case k.downcase
 					when "activemodule"
+						print_status "Loading active module #{v}"
 						run_single("use #{v}")
 				end
 			}
@@ -408,9 +417,8 @@ class Driver < Msf::Ui::Driver
 		# Build out the console config group
 		group = {}
 
-		if (active_module)
-			group['ActiveModule'] = active_module.fullname
-		end
+		group['ActiveModule']   = active_module.fullname   if active_module
+		group['PreviousModule'] = previous_module.fullname if previous_module
 
 		# Save it
 		begin
@@ -600,6 +608,10 @@ class Driver < Msf::Ui::Driver
 	# The active module associated with the driver.
 	#
 	attr_accessor :active_module
+	#
+	# The previous module associated with the driver.
+	#
+	attr_accessor :previous_module
 	#
 	# The active session associated with the driver.
 	#
