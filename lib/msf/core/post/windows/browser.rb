@@ -20,7 +20,7 @@ module Browser
 	# @return [true,false] True if there were no errors, false otherwise
 	# @raise [RuntimeError] if InternetCheckConnection returns an error
 	#
-	def check_internet_connection(opts={})
+	def check_internet_connection(opts = {})
 		defaults = {:url => "www.google.com", :force_connection => false}
 		opts = defaults.merge(opts)
 		if opts[:force_connection]
@@ -38,7 +38,36 @@ module Browser
 	end
 
 	# @return [Fixnum] Opaque Windows handle HINTERNET as returned by InternetOpenA()
-	def initialize_internet(opts={})
+	def initialize_internet(handle, url, opts = {})
+		defaults = {
+					:headers => nil,
+					:headers_length => 0,
+					:flags => INTERNET_FLAG_HYPERLINK && \
+								INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTPS && \
+								INTERNET_FLAG_NO_CACHE_WRITE && \
+								INTERNET_FLAG_NO_UI && \
+								INTERNET_FLAG_PRAGMA_NOCACHE,
+					:context => nil # is this right?  it's a PDWORD, could we use it for port in firebind?
+				}
+		opts = defaults.merge(opts)
+		res = session.railgun.wininet.InternetOpenUrl(
+			handle,
+			url,
+			opts[:headers],
+			opts[:headers_length],
+			opts[:flags],
+			opts[:context])
+		if not res["GetLastError"] == 0
+			raise RuntimeError.new("Unable to initialize wininet dll, GetLastError: #{res["GetLastError"]}")
+			# @todo:  To determine why access to the service was denied, call InternetGetLastResponseInfo.
+			# @todo:  add error code lookup?
+		else
+			return res["return"]
+			# use InternetReadFile to read the returned data
+		end
+	end
+
+	def open_url_simple(opts = {})
 		defaults = {
 					:ua => "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)", # ghetto, detect it
 					:access => INTERNET_OPEN_TYPE_PRECONFIG,
@@ -47,7 +76,8 @@ module Browser
 					:flags => INTERNET_FLAG_ASYNC,
 				}
 		opts = defaults.merge(opts)
-		res = session.railgun.wininet.InternetOpenA(opts[:ua],opts[:access],opts[:proxy_name],opts[:proxy_bypass],opts[:flags])
+		# @todo:  prepend ftp:, http:, or https: if not present
+		res = session.railgun.wininet.InternetOpenUrlA(opts[:ua],opts[:access],opts[:proxy_name],opts[:proxy_bypass],opts[:flags])
 		if not res["GetLastError"] == 0
 			raise RuntimeError.new("Unable to initialize wininet dll, GetLastError: #{res["GetLastError"]}")
 			# @todo:  add error code lookup?
