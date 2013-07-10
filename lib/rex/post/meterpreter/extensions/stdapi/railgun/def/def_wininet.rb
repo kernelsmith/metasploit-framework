@@ -50,6 +50,20 @@ class Def_wininet
 			['PDWORD','dwContext','in']
 			])
 
+		dll.add_function('InternetReadFile', 'BOOL', [
+			['DWORD', 'hFile', 'in'], # Handle returned from a previous call to InternetOpenUrl, FtpOpenFile, or HttpOpenRequest.
+			['PBLOB', 'lpBuffer', 'out'],
+			['DWORD', 'dwNumberOfBytesToRead', 'in'],
+			['PBLOB', 'lpdwNumberOfBytesRead', 'out'],
+		])
+
+		dll.add_function('InternetReadFileEx', 'BOOL', [
+			['DWORD', 'hFile', 'in'], # Handle returned by the InternetOpenUrl or HttpOpenRequest function.
+			['PBLOB', 'lpBuffersOut', 'out'],
+			['DWORD', 'dwFlags', 'in'],
+			['PDWORD', 'dwContext', 'in'],
+		])
+
 		dll.add_function('HttpOpenRequest', 'DWORD', [
 			['DWORD', 'hConnect', 'in'],
 			['PCHAR', 'lpszVerb', 'in'],
