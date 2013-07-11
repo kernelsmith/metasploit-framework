@@ -126,12 +126,14 @@ C_STRUCTS_TO_RAILGUN = {
 				'GUID'     => 'PBLOB', # if thing is *thing
 				'BOOLEAN'  => 'BOOL',
 				'PSID'     => 'LPVOID',
-				'DWORD_PTR' => 'PDWORD'
+				'DWORD_PTR' => 'PDWORD',
 			},
 	'out' => {
+				'PBLOB'    => 'PBLOB',
 				'PSECURITY_DESCRIPTOR' => 'PBLOB', # if thing is *thing
 				'PSID'     => 'PBLOB',
-				'LPDWORD'  => 'PBLOB'
+				'LPDWORD'  => 'PBLOB',
+				'LPTSTR'   => {'A' => 'PCHAR', 'W' => 'PWCHAR'},  # Regular  TCHAR String (wide char or char dep on unicode)
 			},
 	'inout' => {
 				'HANDLE'   => 'DWORD',
@@ -148,7 +150,7 @@ C_STRUCTS_TO_RAILGUN = {
 				'GUID'     => 'PBLOB', # if thing is *thing
 				'BOOLEAN'  => 'BOOL',
 				'PSID'     => 'LPVOID',
-				'DWORD_PTR' => 'PDWORD'
+				'DWORD_PTR' => 'PDWORD',
 			},
 	'unk' => Hash.new("UNK")
 }
@@ -159,7 +161,9 @@ page = get_page(url)
 all_code_snippet_containers = page.xpath(CODE_SNIP_CONTAINER_XPATH)
 # until forced to do something fancier, we'll just take the first C++ style code snippet
 cpp_code = get_code_from_nodeset(all_code_snippet_containers)
-puts "C++ Code:"
+puts
+puts "[*]  C++ Code:"
+puts "---------------------------------------------------"
 puts cpp_code
 #puts cpp_code.unpack('U*').collect {|x| x.to_s 16}.join
 # @todo:  get syntax from snippet
@@ -169,7 +173,9 @@ puts cpp_code
 # @todo:  add comments to params using extra info in parameters section
 
 def get_ret_type_and_func_name(line)
+	#puts "Determining return type and function name from:\n#{line}"
 	parts = line.split(/\s+/) # always returns an array, even an empty one
+
 	ret_type = "UNK"
 	func_name = "Unknown"
 	unless parts.empty?
@@ -177,30 +183,106 @@ def get_ret_type_and_func_name(line)
 		ret_type = C_STRUCTS_TO_RAILGUN['ret'][type]
 		ret_type = "UNK" unless ret_type
 		func_name = parts[1].sub(/\($/,'')
+		# if func_name still has () in it, it's probably a one-line (void) deal like
+		# http://msdn.microsoft.com/en-us/library/windows/desktop/aa383938(v=vs.85).aspx
+		if func_name =~ /\([A-Za-z]*\)/
+			func_name = func_name.split(/\(/).first
+		end
 	end
 	return [ret_type, func_name]
+end
+
+def convert_in_param(cpp_type, name, unicode = false)
+	if cpp_type == "unsigned long"
+		# Basic Rule (in):  If type is "unsigned long" and name starts w/ *, it's a PDWORD
+		if name =~ /^\*/
+			interim_type = "LPDWORD"
+		# Basic Rule (in):  If type is "unsigned long" and name starts w/ dw, it's a DWORD
+		elsif name =~ /^dw/
+			interim_type = "DWORD"
+		end
+	# Basic Rule (in):  If it starts w/"H", prolly a handle so DWORD
+	elsif cpp_type =~ /^H/ # ghetto, will have false pos
+		interim_type = "HANDLE"
+	# Basic Rule (in):  If it starts w/"LP", prolly a ptr so PDWORD
+	elsif cpp_type =~ /^LP/ # ghetto, will have false pos
+		interim_type = "LPDWORD"
+	# Basic Rule (in):  If none of above, rely on the hash
+	else
+		interim_type = cpp_type
+	end
+	rg_type = C_STRUCTS_TO_RAILGUN['in'][interim_type]
+	if rg_type.class == Hash
+		rg_type = unicode ? rg_type["W"] : rg_type["A"]
+	end
+	rg_type
+end
+
+def convert_out_param(cpp_type, name, unicode = false)
+	# Basic Rule (out):  If it starts w/"P" & name starts w/ * prolly a pointer to struct, aka PBLOB
+	if cpp_type =~ /^P/ and name =~ /^\*/# ghetto, might have false pos
+		interim_type = "LPDWORD"
+	
+	elsif cpp_type == "unsigned long"
+		# Basic Rule (out):  If type is "unsigned long" and name starts w/ *, it's a PBLOB
+		if name =~ /^\*/
+			interim_type = "LPDWORD"
+		# Basic Rule (out):  If type is "unsigned long" and name starts w/ dw, it's a DWORD
+		elsif name =~ /^dw/
+			interim_type = "DWORD"
+		end
+	# Basic Rule (out):  If none of above, rely on the hash
+	else
+		interim_type = cpp_type
+	end
+	rg_type = C_STRUCTS_TO_RAILGUN['out'][interim_type]
+	if rg_type.class == Hash
+		rg_type = unicode ? rg_type["W"] : rg_type["A"]
+	end
+	rg_type
+end
+
+def convert_inout_param(cpp_type, name, unicode = false)
+	# treat as an 'in' param for now
+	convert_in_param(cpp_type, name, unicode)
 end
 
 def get_param(line, unicode = false)
 	#puts "Line is:  #{line}"
 	parts = line.split(/\s+/)
-	direction = normalize_param_direction(parts[0])
-	if parts[1] =~ /^H/
-		interim_type = "HANDLE"
-	elsif parts[1] =~ /^LP/
-		interim_type = "LPDWORD"
+	if parts.length == 3
+		direction = normalize_param_direction(parts[0])
+		cpp_type = parts[1]
+		name = parts[2].sub(/,$/,'')
+	elsif parts.length == 4
+		# assume it has a 2-word type like "unsigned long"
+		# e.g. http://msdn.microsoft.com/en-us/library/windows/desktop/aa384688(v=vs.85).aspx
+		direction = normalize_param_direction(parts[0])
+		cpp_type = parts[1,2].join(" ")
+		name = parts[3].sub(/,$/,'')		
 	else
-		interim_type = parts[1]
+		# we can probably trust the direction
+		direction = normalize_param_direction(parts[0])
+		# type and name are ???
+		cpp_type = "UNK"
+		name = "unknown"
 	end
-	rg_type = C_STRUCTS_TO_RAILGUN[direction][interim_type]
-	if rg_type.class == Hash
-		rg_type = unicode ? rg_type["W"] : rg_type["A"]
+	case direction
+	when 'in'
+		rg_type = convert_in_param(cpp_type, name, unicode)
+	when 'out'
+		rg_type = convert_out_param(cpp_type, name, unicode)
+	when 'inout'
+		rg_type = convert_inout_param(cpp_type, name, unicode)
+	else
+		rg_type = "UNK"
 	end
-	name = parts[2].sub(/,$/,'')
 	return [rg_type, name, direction]
 end
 
 def analyze_cpp_code(cpp_code)
+	#puts "Analyzing this code: #{cpp_code}"
+
 	# BOOL InternetCheckConnection(
 	#   _In_  LPCTSTR lpszUrl,
 	#   _In_  DWORD dwFlags,
@@ -217,12 +299,15 @@ def analyze_cpp_code(cpp_code)
 	rg_type = "UNK"
 	name = 'unknown'
 	params = []
-	cpp_code.lines do |line|
-		next if line =~ /^\s*$/ or line =~ /\);/
-		line.strip!
-		#puts "line is #{line}"
 
-		if line =~ /^[A-Z]{3,}\s+[A-Z]+[a-z]+.*\($/
+	cpp_code.lines do |line|
+		next if line =~ /^\s*$/ or line =~ /^\s*\);/ # blank or last line
+		line.strip!
+		puts "Analyzing line: #{line}"
+		line.sub!("WINAPI ",'') # sometimes you get this WINAPI thing like in
+		# http://msdn.microsoft.com/en-us/library/windows/desktop/aa384688(v=vs.85).aspx
+		# I Don't know what it means, so I drop it for now.
+		if line =~ /^[A-Z]{3,}\s+[A-Z]+[a-z]+.*\([A-Za-z);]*$/
 			# this is the first line, we need to grab the ret type & name
 			ret_type, func_name = get_ret_type_and_func_name(line)
 		else
@@ -262,6 +347,9 @@ rg_code = format_railgun_code(c_method_name, ret_type, params)
 # @todo:  here?  or when formatting railgun code? add comments
 
 ruby_method_name = rubify_method_name(c_method_name)
-puts ruby_method_name
-puts "Railgun Code:"
+puts
+puts "[*]  Possible ruby method name:  #{ruby_method_name}"
+puts
+puts "[*]  Railgun Code:"
+puts "---------------------------------------------------"
 puts rg_code
