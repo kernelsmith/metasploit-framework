@@ -303,7 +303,7 @@ def analyze_cpp_code(cpp_code)
 	cpp_code.lines do |line|
 		next if line =~ /^\s*$/ or line =~ /^\s*\);/ # blank or last line
 		line.strip!
-		puts "Analyzing line: #{line}"
+		#puts "Analyzing line: #{line}"
 		line.sub!("WINAPI ",'') # sometimes you get this WINAPI thing like in
 		# http://msdn.microsoft.com/en-us/library/windows/desktop/aa384688(v=vs.85).aspx
 		# I Don't know what it means, so I drop it for now.
