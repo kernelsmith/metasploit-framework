@@ -24,7 +24,8 @@ class Plugin::Alias < Msf::Plugin
 		@@alias_opts = Rex::Parser::Arguments.new(
 			"-h" => [ false, "Help banner."                    ],
 			"-c" => [ true, "Clear an alias (* to clear all)."],
-			"-f" => [ true,  "Force an alias assignment."      ]
+			"-f" => [ true,  "Force an alias assignment."      ],
+			"makerc" => [ false,  "Append to or create a resource file with all active aliases" ]
 		)
 		#
 		# Returns the hash of commands supported by this dispatcher.
@@ -48,22 +49,15 @@ class Plugin::Alias < Msf::Plugin
 				if @aliases.length == 0
 					return print_status("No aliases currently defined")
 				else
-					tbl = Rex::Ui::Text::Table.new(
-						'Header'  => "Current Aliases",
-						'Prefix'  => "\n",
-						'Postfix' => "\n",
-						'Columns' => [ '', 'Alias Name', 'Alias Value' ]
-					)
-					# add 'alias' in front of each row so that the output can be copy pasted into an rc file if desired
-					@aliases.each_pair do |key,val|
-						tbl << ["alias",key,val]
-					end
-					return print(tbl.to_s)
+					return print(format_aliases)
 				end
 			when 1 # display the alias if one matches this name (or help)
 				return cmd_alias_help if args[0] == "-h" or args[0] == "--help"
 				if @aliases.keys.include?(args[0])
 					print_status("\'#{args[0]}\' is aliased to \'#{@aliases[args[0]]}\'")
+				elsif args[0] == "makerc"
+					return alias_makerc
+					# check return val?
 				else
 					print_status("\'#{args[0]}\' is not currently aliased")
 				end
@@ -79,6 +73,8 @@ class Plugin::Alias < Msf::Plugin
 				elsif args[0] == "-c"
 					clear = true
 					args.shift
+				elsif args[0] == "makerc"
+					return alias_makerc(args[1]) # ignores additional args if any
 				end
 				name = args.shift
 				# alias name can NEVER be certain reserved words like 'alias', add any other reserved words here
@@ -167,6 +163,50 @@ class Plugin::Alias < Msf::Plugin
 		end
 
 		private
+
+		#
+		# do all tasks required to add currently active aliases to a resource file
+		#
+		def alias_makerc(file_name = "msfconsole.rc")
+			if file_name == "msfconsole.rc"
+				file_name = File.join(Msf::Config.config_directory, file_name)
+			end
+			write_alias_rc(file_name, format_aliases(false))
+		end
+
+		#
+		# Actually write the aliases to the file, appending if file exists
+		#
+		def write_alias_rc(file_name, content)
+			File.open(file_name, "ab") do |f|
+				f.puts "load alias"
+				f.puts content
+			end
+			# @todo rescue File errors
+		end
+
+		def format_aliases(with_headers = true)
+			if with_headers
+				tbl = Rex::Ui::Text::Table.new(
+					'Header'  => "Current Aliases",
+					'Prefix'  => "\n",
+					'Postfix' => "\n",
+					'Columns' => [ '', 'Alias Name', 'Alias Value' ]
+				)
+			else # @todo: there needs to be a way to set to table header/col title after init
+				tbl = Rex::Ui::Text::Table.new(
+					'Prefix'  => "\n",
+					'Postfix' => "\n",
+					'Columns' => [ '', '', '' ]
+				)
+			end
+			# add 'alias -f' in front of each row
+			@aliases.each_pair do |key,val|
+				tbl << ["alias -f", key,val]
+			end
+			return with_headers ? tbl.to_s : tbl.to_s.gsub(/^\s*$/,'')
+		end
+
 		#
 		# do everything needed to add an alias of +name+ having the value +value+
 		#
