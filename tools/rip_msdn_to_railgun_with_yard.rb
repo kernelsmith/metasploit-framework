@@ -35,6 +35,8 @@ class MsdnMethod
 	require 'nokogiri'
 	require 'open-uri'
 
+	include Comparable
+
 	attr_reader :source, :nokodoc, :dll_name
 	attr_reader :c_args, :c_ret_type, :c_name, :c_code
 	attr_reader :ruby_args, :ruby_ret_type, :ruby_name, :ruby_code
@@ -189,24 +191,28 @@ class MsdnMethod
 	end
 
 	def get_dll_dry_helper_function
-		%q~
-		# @example run_dll_function(:wininet, :InternetOpen, nil, "my ua string", "INTERNET_OPEN_TYPE_DIRECT", nil, nil, 0)
-		def run_dll_function(dll_as_sym, function_name_as_sym, custom_error_msg = nil, *function_args)
-			args = [function_name_as_sym]
-			args += function_args
-			results = session.railgun.send(dll_as_sym).send(args * ",") # use this array format to avoid extra comma when args initially empty
-			err = results["GetLastError"]
-			if not err == 0
-				err_code = results['GetLastError']
-				error_msg = custom_error_msg || "Error running #{dll_as_sym.to_s}.dll function.  #{function_name_as_sym.to_s} error code: #{err_code}\n"
-				error_msg += "This WinAPI error may mean:  #{lookup_error(err_code, /^ERROR_/)}"
-				# @TODO; see if we can add to this error regex, look at msdn for wininet fxns, might be ERROR_INTERNET_* etc
-				raise RuntimeError.new(error_msg)
-			else
-				results["return"]
-			end
+	%q~
+	# @example run_dll_function(:wininet, :InternetOpen, nil, "my ua string", "INTERNET_OPEN_TYPE_DIRECT", nil, nil, 0)
+	def run_dll_function(dll_as_sym, function_name_as_sym, custom_error_msg = nil, *function_args)
+		args = [function_name_as_sym]
+		args += function_args
+		results = session.railgun.send(dll_as_sym).send(args * ",") # use this array format to avoid extra comma when args initially empty
+		err = results["GetLastError"]
+		if not err == 0
+			err_code = results['GetLastError']
+			error_msg = custom_error_msg || "Error running #{dll_as_sym.to_s}.dll function.  #{function_name_as_sym.to_s} error code: #{err_code}\n"
+			error_msg += "This WinAPI error may mean:  #{lookup_error(err_code, /^ERROR_/)}"
+			# @TODO; see if we can add to this error regex, look at msdn for wininet fxns, might be ERROR_INTERNET_* etc
+			raise RuntimeError.new(error_msg)
+		else
+			results["return"]
 		end
-		~
+	end
+	~
+	end
+
+	def <=> (comparator)
+		self.c_name + self.source <=> comparator.c_name + self.source
 	end
 
 	private
@@ -513,6 +519,7 @@ else
 		msdn_method.parse
 		msdn_methods << msdn_method
 	end
+	msdn_methods.sort!
 	c_disp, rg_disp, ruby_disp = [],[],[]
 	msdn_methods.each do |m|
 		c_disp << m.c_code
