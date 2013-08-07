@@ -157,7 +157,7 @@ class MsdnMethod
 		return nil if @c_code.empty? # some urls just display "This function is not supported"
 		# @TODO:  we only support cpp parsing at the moment, maybe add C parsing some day
 		@c_name, @c_ret_type, @c_args = analyze_cpp_code(@c_code)
-		puts "Got #{@c_name}, #{@c_ret_type}, #{@c_args.inspect}"
+		#puts "Got #{@c_name}, #{@c_ret_type}, #{@c_args.inspect}"
 		@railgun_name = @c_name # identical
 		#puts "Converting c method name to ruby method name"
 		@ruby_name = rubify_name(@c_name)
@@ -171,7 +171,7 @@ class MsdnMethod
 		@railgun_code = format_railgun_code(@railgun_name, @railgun_ret_type, @railgun_args)
 		@ruby_args = []
 		@c_args.each do |arg|
-			puts "Converting this c_arg:#{arg} to a ruby_arg"
+			#puts "Converting this c_arg:#{arg} to a ruby_arg"
 			if not arg[1] =~ /[A-Z]+/ # if no capital letters found
 				@ruby_args << arg[1]
 			else
@@ -239,8 +239,12 @@ private :run_dll_function
 ~
 	end
 
-	def <=> (comparator)
-		self.c_name <=> comparator.c_name
+	def <=>(other)
+		if self.c_name == other.c_name
+			self.source <=> other.source
+		else
+			self.c_name <=> other.c_name
+		end
 	end
 
 	private
@@ -472,7 +476,7 @@ private :run_dll_function
 		cpp_code.lines do |line|
 			next if line =~ /^\s*$/ or line =~ /^\s*\);/ # blank or last line
 			line.strip!
-			puts "Analyzing line: #{line}"
+			#puts "Analyzing line: #{line}"
 			line.sub!("WINAPI ",'') # sometimes you get this WINAPI thing like in
 			# http://msdn.microsoft.com/en-us/library/windows/desktop/aa384688(v=vs.85).aspx
 			# It defines the call type as WINAPI which is the windows default anyways
@@ -578,7 +582,8 @@ else
 		msdn_method.parse
 		msdn_methods << msdn_method
 	end
-	msdn_methods.sort!
+	# sort is broken for some reason I don't understand atm.
+	#msdn_methods.sort!
 	c_disp, rg_disp, ruby_disp = [],[],[]
 	msdn_methods.each do |m|
 		c_disp << m.c_code
