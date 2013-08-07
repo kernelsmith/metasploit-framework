@@ -56,13 +56,15 @@ class MsdnMethod
 
 	C_STRUCTS_TO_RAILGUN = {
 		'ret' => {
-					'bool'     => 'BOOL',
-					'BOOL'     => 'BOOL',
+					#'bool'     => 'BOOL',
+					#'BOOL'     => 'BOOL',
+					#'Bool'     => 'BOOL',
+					#'BOOLAPI'  => 'BOOL', # I have no idea what BOOLAPI is.
+					# I got sick of all the bool variants and just used a regex b4 calling in  here.
 					'handle'   => 'DWORD',
 					'HANDLE'   => 'DWORD',
 					'void'     => 'VOID',
 					'VOID'     => 'VOID',
-					'BOOLAPI'  => 'BOOL', # I have no idea what BOOLAPI is.
 				},
 		'in'  => { # NOTES:  LP = Pointer, C = Const, STR = String, W = Wide or Unicode
 					# T = W if unicode is def, else regular, so TCHAR = WCHAR if unicode, else TCHAR = CHAR
@@ -154,10 +156,15 @@ class MsdnMethod
 		@c_code = get_code_from_nodeset(all_code_snippet_containers)
 		# @TODO:  we only support cpp parsing at the moment, maybe add C parsing some day
 		@c_name, @c_ret_type, @c_args = analyze_cpp_code(@c_code)
-		#puts "Got #{@c_name}, #{@c_ret_type}, #{@c_args.inspect}"
+		puts "Got #{@c_name}, #{@c_ret_type}, #{@c_args.inspect}"
 		@railgun_name = @c_name # identical
 		@ruby_name = rubify_name(@c_name)
-		@railgun_ret_type = C_STRUCTS_TO_RAILGUN['ret'][@c_ret_type] || "UNK"
+		if @c_ret_type =~ /^bool/i
+			# let's just nip all the numerous bool variants in the bud
+			@railgun_ret_type = "BOOL"
+		else
+			@railgun_ret_type = C_STRUCTS_TO_RAILGUN['ret'][@c_ret_type] || "UNK"
+		end
 		@railgun_args = @c_args
 		@railgun_code = format_railgun_code(@railgun_name, @railgun_ret_type, @railgun_args)
 		@ruby_args = []
@@ -229,8 +236,9 @@ private :run_dll_function
 
 	private
 
-	def rubify_name(mname)
-		tmp = mname.gsub(/::/, '/')
+	def rubify_name(cname)
+		puts "Giving #{cname} some ruby flair"
+		tmp = cname.gsub(/::/, '/')
 		tmp = tmp.gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2')
 		tmp = tmp.gsub(/([a-z\d])([A-Z])/,'\1_\2')
 		tmp.tr("-", "_").downcase
@@ -324,7 +332,7 @@ private :run_dll_function
 	end
 
 	def get_c_ret_type_and_func_name(line)
-		#puts "Determining return type and function name from:\n#{line}"
+		puts "Determining return type and function name from:\n#{line}"
 		parts = line.split(/\s+/) # always returns an array, even an empty one
 
 		c_ret_type = "UNK"
@@ -355,7 +363,7 @@ private :run_dll_function
 			interim_type = "HANDLE"
 		# Basic Rule (in):  If it starts w/"LP", prolly a ptr so PDWORD
 		elsif cpp_type =~ /^LP/ # ghetto, will have false pos
-			interim_type = "LPDWORD"
+			interim_type = "LPDWORD" # will become PDWORD
 		# Basic Rule (in):  If none of above, rely on the hash
 		else
 			interim_type = cpp_type
@@ -456,11 +464,12 @@ private :run_dll_function
 		cpp_code.lines do |line|
 			next if line =~ /^\s*$/ or line =~ /^\s*\);/ # blank or last line
 			line.strip!
-			#puts "Analyzing line: #{line}"
+			puts "Analyzing line: #{line}"
 			line.sub!("WINAPI ",'') # sometimes you get this WINAPI thing like in
 			# http://msdn.microsoft.com/en-us/library/windows/desktop/aa384688(v=vs.85).aspx
-			# I Don't know what it means, so I drop it for now.
-			if line =~ /^[A-Z]{3,}\s+[A-Z]+[a-z]+.*\([A-Za-z);]*$/
+			# It defines the call type as WINAPI which is the windows default anyways
+			puts "Checking regex against:#{line}"
+			if line =~ /^[A-Z]+[a-z]*\s+[A-Z]+[a-z]+.*\([A-Za-z);]*$/ # should probably just use /\(/
 				# this is the first line, we need to grab the ret type & name
 				ret_type, func_name = get_c_ret_type_and_func_name(line)
 			else
@@ -482,9 +491,9 @@ private :run_dll_function
 	def normalize_param_direction(cpp_code_dir)
 		# @todo: what about _in_out_?
 		case cpp_code_dir
-		when /_inout/i
+		when /_inout_/i
 			res = 'inout'
-		when /_in_/i
+		when /(_in_|_Reserved_)/i
 			res = 'in'
 		when /_out_/i
 			res = 'out'
