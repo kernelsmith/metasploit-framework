@@ -73,6 +73,8 @@ class MsdnMethod
 					# out params are always PBLOB's if they are pointer indicated like *so? or start with p?
 					'HANDLE'   => 'DWORD',
 					'LPCSTR'   => 'PCHAR', # Constant String
+					'PWSTR'    => 'PWCHAR',
+					'PBYTE'    => 'DWORD', # not sure what else to do w/pbyte
 					'LPCTSTR'  => {'A' => 'PCHAR', 'W' => 'PWCHAR'}, # Constant TCHAR String (wide char or char dep on unicode)
 					'LPTSTR'   => {'A' => 'PCHAR', 'W' => 'PWCHAR'},  # Regular  TCHAR String (wide char or char dep on unicode)
 					'DWORD'    => 'DWORD',
@@ -446,6 +448,7 @@ private :run_dll_function
 		else
 			rg_type = "UNK"
 		end
+		rg_type ||= "UNK"
 		return [rg_type, name, direction]
 	end
 
