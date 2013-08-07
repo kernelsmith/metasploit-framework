@@ -154,10 +154,12 @@ class MsdnMethod
 		all_code_snippet_containers = nokodoc.xpath(CODE_SNIP_CONTAINER_XPATH)
 		# until forced to do something fancier, we only parse the first code sample we encounter
 		@c_code = get_code_from_nodeset(all_code_snippet_containers)
+		return nil if @c_code.empty? # some urls just display "This function is not supported"
 		# @TODO:  we only support cpp parsing at the moment, maybe add C parsing some day
 		@c_name, @c_ret_type, @c_args = analyze_cpp_code(@c_code)
 		puts "Got #{@c_name}, #{@c_ret_type}, #{@c_args.inspect}"
 		@railgun_name = @c_name # identical
+		#puts "Converting c method name to ruby method name"
 		@ruby_name = rubify_name(@c_name)
 		if @c_ret_type =~ /^bool/i
 			# let's just nip all the numerous bool variants in the bud
@@ -168,7 +170,14 @@ class MsdnMethod
 		@railgun_args = @c_args
 		@railgun_code = format_railgun_code(@railgun_name, @railgun_ret_type, @railgun_args)
 		@ruby_args = []
-		@c_args.each {|arg| @ruby_args << rubify_name(arg[1].split(/^[a-z]+/).last)}
+		@c_args.each do |arg|
+			puts "Converting this c_arg:#{arg} to a ruby_arg"
+			if not arg[1] =~ /[A-Z]+/ # if no capital letters found
+				@ruby_args << arg[1]
+			else
+				@ruby_args << rubify_name(arg[1].split(/^[a-z]+/).last)
+			end
+		end
 		main_section = nokodoc.xpath(MAIN_SECTION_XPATH)
 		return unless main_section # we couldn't find any other info to look at
 		parse_main_section(main_section)
@@ -237,7 +246,6 @@ private :run_dll_function
 	private
 
 	def rubify_name(cname)
-		puts "Giving #{cname} some ruby flair"
 		tmp = cname.gsub(/::/, '/')
 		tmp = tmp.gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2')
 		tmp = tmp.gsub(/([a-z\d])([A-Z])/,'\1_\2')
@@ -468,7 +476,7 @@ private :run_dll_function
 			line.sub!("WINAPI ",'') # sometimes you get this WINAPI thing like in
 			# http://msdn.microsoft.com/en-us/library/windows/desktop/aa384688(v=vs.85).aspx
 			# It defines the call type as WINAPI which is the windows default anyways
-			puts "Checking regex against:#{line}"
+			#puts "Checking regex against:#{line}"
 			if line =~ /^[A-Z]+[a-z]*\s+[A-Z]+[a-z]+.*\([A-Za-z);]*$/ # should probably just use /\(/
 				# this is the first line, we need to grab the ret type & name
 				ret_type, func_name = get_c_ret_type_and_func_name(line)
