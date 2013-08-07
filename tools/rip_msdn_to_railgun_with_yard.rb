@@ -45,6 +45,7 @@ class MsdnMethod
 	attr_reader :railgun_args, :railgun_ret_type, :railgun_name, :railgun_code 
 
 	# various constants we'll need to reference
+	INDENT = "\t"
 	DLL_NAME_XPATH = "//div[@id='page']//div[@id='body']//div[@id='leftNav']//div[@id='tocnav']//div[@class='toclevel1']"
 	ALL_FXNS_XPATH = "//div[@id='page']//div[@id='body']//div[@id='leftNav']//div[@id='tocnav']//div[@class='toclevel2']"
 	CODE_SNIP_CONTAINER_XPATH = "//div[@class='codeSnippetContainer']" # e.g. id="code-snippet-1"
@@ -83,6 +84,7 @@ class MsdnMethod
 					'BOOLEAN'  => 'BOOL',
 					'PSID'     => 'LPVOID',
 					'DWORD_PTR' => 'PDWORD',
+					'FILETIME' => 'QWORD', # not sure if QWORD is actually supported or not
 				},
 		'out' => {
 					'PBLOB'    => 'PBLOB',
@@ -193,24 +195,32 @@ class MsdnMethod
 	end
 
 	def get_dll_dry_helper_function
-	%q~
-	# @example run_dll_function(:wininet, :InternetOpen, nil, "my ua string", "INTERNET_OPEN_TYPE_DIRECT", nil, nil, 0)
-	def run_dll_function(dll_as_sym, function_name_as_sym, custom_error_msg = nil, *function_args)
-		args = [function_name_as_sym]
-		args += function_args
-		results = session.railgun.send(dll_as_sym).send(args * ",") # use this array format to avoid extra comma when args initially empty
-		err = results["GetLastError"]
-		if not err == 0
-			err_code = results['GetLastError']
-			error_msg = custom_error_msg || "Error running #{dll_as_sym.to_s}.dll function.  #{function_name_as_sym.to_s} error code: #{err_code}\n"
-			error_msg += "This WinAPI error may mean:  #{lookup_error(err_code, /^ERROR_/)}"
-			# @TODO; see if we can add to this error regex, look at msdn for wininet fxns, might be ERROR_INTERNET_* etc
-			raise RuntimeError.new(error_msg)
-		else
-			results["return"]
-		end
+%q~This method helps DRY out our code and provides basic error handling and messaging.
+It only returns the "return" part of the hash returned by railgun, unless there is an error
+# @example run_dll_function(:wininet, :InternetOpen, nil, "my ua string", "INTERNET_OPEN_TYPE_DIRECT", nil, nil, 0)
+# @todo finish this yard doc
+# @param [Symbol] DLL name as a Symbol
+# @param [Symbol] C Function name as a Symbol
+# @param [String, nil] Custom error message to use instead of dyanmically generated message
+# @param Variable number of additional args as needed
+# @return varies depending on the C-function that is called
+def run_dll_function(dll_as_sym, function_name_as_sym, custom_error_msg = nil, *function_args)
+	args = [function_name_as_sym]
+	args += function_args
+	results = session.railgun.send(dll_as_sym).send(args * ",") # use this array format to avoid extra comma when args initially empty
+	err = results["GetLastError"]
+	if not err == 0
+		err_code = results['GetLastError']
+		error_msg = custom_error_msg || "Error running #{dll_as_sym.to_s}.dll function.  #{function_name_as_sym.to_s} error code: #{err_code}\n"
+		error_msg += "This WinAPI error may mean:  #{lookup_error(err_code, /^ERROR_/)}"
+		# @TODO; see if we can add to this error regex, look at msdn for wininet fxns, might be ERROR_INTERNET_* etc
+		raise RuntimeError.new(error_msg)
+	else
+		results["return"]
 	end
-	~
+end
+private :run_dll_function
+~
 	end
 
 	def <=> (comparator)
@@ -227,9 +237,39 @@ class MsdnMethod
 	end
 
 	def rubify_code(c_method_name, ruby_method_name, ruby_arguments)
-		res = "def _#{ruby_method_name}(#{ruby_arguments.join(', ')})\n"
-		arr = [":"+dll_name, ":"+c_method_name] + ruby_arguments
-		res += "\t ret = run_dll_function(#{arr.join(", ")})\n"
+		res = ""
+		arr = []
+		if ruby_arguments.length > 3
+			res += "# There are quite a few arguments so an opts hash was added.  To clean\n"
+			res += "# up the API, you should review it and adjust as needed.  You may want\n"
+			res += "# to consider regrouping args for: clarity, so args that are usually\n"
+			res += "# left at default values, or are optional, or always a specific value,\n"
+			res += "# etc, are put in the opts hash.  Or, you may want to get rid of the\n"
+			res += "# opts hash entirely.\n"
+			first_three = ruby_arguments[0..2]
+			opts_args = ruby_arguments[3..-1]
+			first_three << "opts = {}"
+			res += "def _#{ruby_method_name}(#{first_three.join(', ')})\n"
+			res += "#{INDENT}defaults = {  # defaults for args in opts hash\n"
+			opts_args.each do |arg|
+				res += "#{INDENT}#{INDENT}:#{arg} => #{arg}_default\n"
+			end
+			res += "#{INDENT}}\n\n"
+			res += "#{INDENT}Merge in defaults. This approach allows caller to safely pass in a nil\n"
+			res += "#{INDENT}opts = defaults.merge(opts)\n"
+			first_three.pop
+			arr = [":"+dll_name, ":"+c_method_name] + first_three
+			res += "\n#{INDENT}# Any arg validation can go here\n\n"
+			res += "#{INDENT}ret = run_dll_function(#{arr.join(", ")},\n"
+			opts_args.each {|arg| res += "#{INDENT}#{INDENT}opts[#{arg}],\n"}
+			res += "#{INDENT})\n"
+		else
+			res += "def _#{ruby_method_name}(#{ruby_arguments.join(', ')})\n"
+			res += "\n#{INDENT}# Any arg validation can go here\n\n" if ruby_arguments.length > 0
+			arr = [":"+dll_name, ":"+c_method_name] + ruby_arguments
+			res += "#{INDENT}ret = run_dll_function(#{arr.join(", ")})\n"
+		end
+		res += "\n#{INDENT}# Additional code goes here\n\n"
 		res += "end\n"
 	end
 
@@ -432,11 +472,11 @@ class MsdnMethod
 	end
 
 	def format_railgun_code(rg_method_name, rg_ret_type, rg_parameters = [])
-		res = "\t\tdll.add_function(\'#{rg_method_name}\', \'#{rg_ret_type}\', [\n"
+		res = "#{INDENT}#{INDENT}dll.add_function(\'#{rg_method_name}\', \'#{rg_ret_type}\', [\n"
 		rg_parameters.each do |p|
-			res += "\t\t\t[#{p.map {|x| "\'#{x}\'"}.join(", ")}],\n"
+			res += "#{INDENT}#{INDENT}#{INDENT}[#{p.map {|x| "\'#{x}\'"}.join(", ")}],\n"
 		end
-		res += "\t\t])\n"
+		res += "#{INDENT}#{INDENT}])\n"
 	end
 
 	def normalize_param_direction(cpp_code_dir)
@@ -540,6 +580,10 @@ else
 	puts "[*]  Ruby Code:"
 	puts "---------------------------------------------------"
 	ruby_disp.each {|d| puts d;puts}
+	puts
+	puts "# Parsed #{msdn_methods.length} functions"
 end
 puts
 puts orig_msdn_method.get_dll_dry_helper_function
+puts
+
