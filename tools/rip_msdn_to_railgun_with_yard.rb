@@ -14,12 +14,14 @@ require 'open-uri'
 
 url = nil
 source = nil
-additional = 0
+additional = nil
 if ARGV.length == 1
 	source = ARGV[0]
 elsif ARGV.length == 2
 	source = ARGV[0]
 	additional = ARGV[1] =~ /^\s*all\s*$/i ? -1 : ARGV[1].to_i
+	# adjust additional to get desired result later
+	additional -= 1 if additional >= 1 and not additional == -1
 else
 	# "InternetOpen" => "http://msdn.microsoft.com/en-us/library/windows/desktop/aa385096%28v=vs.85%29.aspx"
 	puts "Usage: #{$0} source [num_additional|all]"
@@ -503,7 +505,7 @@ end # MsdnMethod
 
 orig_msdn_method = MsdnMethod.new(source)
 orig_msdn_method.parse
-if additional == 0
+if not additional # nobody like unless...else statements
 	orig_msdn_method.display
 else
 	remaining_function_urls = orig_msdn_method.get_remaining_dll_function_urls
