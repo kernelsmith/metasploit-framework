@@ -240,7 +240,7 @@ private :run_dll_function
 	end
 
 	def <=> (comparator)
-		self.c_name + self.source <=> comparator.c_name + self.source
+		self.c_name <=> comparator.c_name
 	end
 
 	private
