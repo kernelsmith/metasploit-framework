@@ -150,7 +150,7 @@ class MsdnMethod
 		all_code_snippet_containers = nokodoc.xpath(CODE_SNIP_CONTAINER_XPATH)
 		# until forced to do something fancier, we only parse the first code sample we encounter
 		@c_code = get_code_from_nodeset(all_code_snippet_containers)
-		return nil if @c_code.empty? # some urls just display "This function is not supported"
+		return nil if @c_code.nil? or @c_code.empty? # some urls just display "This function is not supported"
 		# @TODO:  we only support cpp parsing at the moment, maybe add C parsing some day
 		@c_name, @c_ret_type, @c_args = analyze_cpp_code(@c_code)
 		#puts "Got #{@c_name}, #{@c_ret_type}, #{@c_args.inspect}"
@@ -766,7 +766,8 @@ msdn_methods.each do |m|
 	total_ruby_disp = "#\n"
 	# sometimes the description comes back w/embedded newlines so we need to add the leading # to all
 	m.description.lines {|line| total_ruby_disp += "# #{line}"}
-	total_ruby_disp += "\n#\n#{m.ruby_yard_tags_comment_block}\n#\n#{m.ruby_code}"
+	total_ruby_disp += "\n# @see #{m.source} #{m.c_name}\n#\n"
+	total_ruby_disp += "#{m.ruby_yard_tags_comment_block}\n#\n#{m.ruby_code}"
 	ruby_disp << total_ruby_disp
 end
 # Final display
