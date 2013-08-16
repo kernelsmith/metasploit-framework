@@ -1,7 +1,5 @@
-#rip_msdn_to_railgun.rb
+#rip_msdn_to_railgun
 # e.g. http://msdn.microsoft.com/en-us/library/windows/desktop/aa385125(v=vs.85).aspx
-
-#
 
 require 'nokogiri'
 require 'open-uri'
@@ -27,9 +25,9 @@ end
 
 
 class MsdnMethod
-	# require these again in case we ever pull this class def out of this file
-	require 'nokogiri'
-	require 'open-uri'
+	# necessary if we ever pull this class def out of this file
+	# require 'nokogiri'
+	# require 'open-uri'
 
 	include Comparable
 
@@ -294,7 +292,6 @@ private :run_dll_function
 	end
 
 	def get_code_from_nodeset(nodeset, start_index = 0, style = /C\+\+/)
-		code_text = nil
 		nodeset.each_with_index do |node,idx|
 			next if idx < start_index
 			# get all the tables in current snippet node
@@ -317,6 +314,7 @@ private :run_dll_function
 				end
 			end
 		end
+		return nil
 	end
 
 	def cleanup_code(str)
@@ -454,7 +452,7 @@ private :run_dll_function
 	end
 
 	def analyze_c_code(c_code)
-		raise Exception.new ("parsing code documented with C-style syntax is not currently supported")
+		raise Exception.new("parsing code documented with C-style syntax is not currently supported")
 	end
 
 	def analyze_cpp_code(cpp_code)
@@ -470,11 +468,8 @@ private :run_dll_function
 		# ["DWORD","dwAddressLength","in"],
 		# ["PBLOB","lpProtocolInfo","in"],
 		# ["PCHAR","lpszAddressString","inout"],
-		direction = "unk"
 		ret_type = "UNK"
 		func_name = "Unknown"
-		rg_type = "UNK"
-		name = 'unknown'
 		params = []
 
 		cpp_code.lines do |line|
@@ -522,7 +517,6 @@ private :run_dll_function
 	def parse_main_section(ms_nodeset)
 		node = ms_nodeset.first
 		# ns.first.children.each {|e| puts e.text if e.text == "Parameters"}
-		found = {}
 		ns = node.children
 		ns.each_with_index do |elem, idx|
 			case elem.text.strip
