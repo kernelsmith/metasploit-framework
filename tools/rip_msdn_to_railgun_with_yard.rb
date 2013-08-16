@@ -1,13 +1,7 @@
 #rip_msdn_to_railgun.rb
 # e.g. http://msdn.microsoft.com/en-us/library/windows/desktop/aa385125(v=vs.85).aspx
 
-# C++
-
-# BOOL InternetCheckConnection(
-#   _In_  LPCTSTR lpszUrl,
-#   _In_  DWORD dwFlags,
-#   _In_  DWORD dwReserved
-# );
+#
 
 require 'nokogiri'
 require 'open-uri'
@@ -40,7 +34,7 @@ class MsdnMethod
 	include Comparable
 
 	attr_reader :source, :nokodoc, :dll_name
-	attr_reader :c_args, :c_ret_type, :c_name, :c_code
+	attr_reader :c_args, :c_ret_type, :c_name, :c_code # c_args are really railgun args ATM.
 	attr_reader :ruby_args, :ruby_ret_type, :ruby_name, :ruby_code
 	attr_reader :railgun_args, :railgun_ret_type, :railgun_name, :railgun_code 
 
@@ -91,6 +85,7 @@ class MsdnMethod
 					'FILETIME' => 'QWORD', # not sure if QWORD is actually supported or not
 				},
 		'out' => {
+					# out params are always PBLOB's if they are pointer indicated like *so? or start with p?
 					'PBLOB'    => 'PBLOB',
 					'PSECURITY_DESCRIPTOR' => 'PBLOB', # if thing is *thing
 					'PSID'     => 'PBLOB',
@@ -169,15 +164,17 @@ class MsdnMethod
 		else
 			@railgun_ret_type = C_STRUCTS_TO_RAILGUN['ret'][@c_ret_type] || "UNK"
 		end
-		@railgun_args = @c_args
+		@railgun_args = @c_args.map do |arg|
+			arg.map {|a| a.gsub('*','')}
+		end # remove any *'s
 		@railgun_code = format_railgun_code(@railgun_name, @railgun_ret_type, @railgun_args)
 		@ruby_args = []
 		@c_args.each do |arg|
 			#puts "Converting this c_arg:#{arg} to a ruby_arg"
 			if not arg[1] =~ /[A-Z]+/ # if no capital letters found
-				@ruby_args << arg[1]
+				@ruby_args << rubify_name(arg[1]) # then send the entire name to be rubified
 			else
-				@ruby_args << rubify_name(arg[1].split(/^[a-z]+/).last)
+				@ruby_args << rubify_name(arg[1].split(/^[a-z]+/).last) # drop lead low case ltrs first
 			end
 		end
 		main_section = nokodoc.xpath(MAIN_SECTION_XPATH)
@@ -255,7 +252,8 @@ private :run_dll_function
 		tmp = cname.gsub(/::/, '/')
 		tmp = tmp.gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2')
 		tmp = tmp.gsub(/([a-z\d])([A-Z])/,'\1_\2')
-		tmp.tr("-", "_").downcase
+		# '*' from pointers are handled here
+		tmp.gsub('*','').tr("-", "_").downcase
 	end
 
 	def rubify_code(c_method_name, ruby_method_name, ruby_arguments)
@@ -391,9 +389,8 @@ private :run_dll_function
 
 	def convert_out_param(cpp_type, name, unicode = false)
 		# Basic Rule (out):  If it starts w/"P" & name starts w/ * prolly a pointer to struct, aka PBLOB
-		if cpp_type =~ /^P/ and name =~ /^\*/# ghetto, might have false pos
+		if cpp_type =~ /^P/ and name =~ /^\*/
 			interim_type = "LPDWORD"
-		
 		elsif cpp_type == "unsigned long"
 			# Basic Rule (out):  If type is "unsigned long" and name starts w/ *, it's a PBLOB
 			if name =~ /^\*/
@@ -402,6 +399,10 @@ private :run_dll_function
 			elsif name =~ /^dw/
 				interim_type = "DWORD"
 			end
+		# Basic Rule (out):  params are always PBLOB's if they are pointers indicated like *so
+		# ghetto, might have false pos, we'll see
+		elsif name =~ /^\*/
+			interim_type = "PBLOB"
 		# Basic Rule (out):  If none of above, rely on the hash
 		else
 			interim_type = cpp_type
@@ -556,6 +557,148 @@ private :run_dll_function
 
 end # MsdnMethod
 
+class YardTag
+	attr_accessor :tag, :description # :name
+	attr_reader :arg_name, :arg_type
+	
+	def initialize(tag = "@param", arg_type = "String", arg_name, description)
+		tag = tag.to_s.strip.downcase
+		@tag = tag =~  /^@[a-z]{3,}$/ ? tag : "@#{tag}"
+		arg_type = arg_type.to_s.strip.capitalize
+		@arg_type = arg_type =~ /^\[[A-Z][a-z]{2,}\]$/ ? arg_type : "[#{arg_type}]"
+		@arg_name = arg_name
+		@description = description
+		#@name = arg_name # might not be needed at all, tbd
+	end
+	# Use this for an opts hash
+	# @param [Hash] opts the options to create a message with.
+	# @option opts [String] :subject The subject
+	# @option opts [String] :from ('nobody') From address
+
+	def to_s
+		if tag.to_s == "@option"
+			# this may not suffice, we'll see
+			"#{tag.to_s} #{arg_type.to_s} :#{arg_name} #{description.to_s}"
+		elsif tag.to_s == "@return"
+			"#{tag.to_s} #{arg_type.to_s} #{description.to_s}"
+		else
+			"#{tag.to_s} #{arg_type.to_s} #{arg_name} #{description.to_s}"
+		end
+	end
+
+end # YardTag
+
+# @example factory = YardTagFactory.new(c_code).new; tags = factory.garden;
+#   factory.yard = new_c_code; tags = factory.garden
+class YardTagFactory
+	attr_accessor :default_arg_type, :default_description, :default_tag, :yard
+
+	def initialize(yard = '', default_tag = "@param")
+		@default_tag = default_tag
+		@yard = yard
+	end
+
+	def translate(*rg_formatted_arg)
+		# some of these are a bit redundant, but we include them for readability
+		type, name, direction = rg_formatted_arg
+		case direction
+		when "in"
+			type = case type
+			when /^[L]?P/ # [L]PDWORD etc, pointers basically, also PBLOB
+				"Fixnum"
+			when /[A-Z]?WORD$/ # WORD, DWORD, QWORD, yeah so basically DWORD
+				"Fixnum"
+			when /CHAR/
+				"String"
+			when /VOID/
+				"Nil"
+			else
+				"Unknown"
+			end
+		when /out/ # out or inout
+			type = case type
+			when /^[L]?P/ # [L]PDWORD etc, pointers basically, also PBLOB
+				"Fixnum"
+			when /[A-Z]?WORD$/ # WORD, DWORD, QWORD, yeah so basically DWORD
+				"Fixnum"
+			else
+				"Unknown"
+			end
+		when "ret"
+			#dword, void, bool
+			type = case type
+			when /[A-Z]?WORD$/ # WORD, DWORD, QWORD, yeah so basically DWORD
+				"Fixnum"
+			when /BOOL/
+				"Boolean"
+			when /VOID/
+				"Nil"
+			else
+				"Unknown"
+			end
+		#when "inout"
+			#
+		else
+			#barf
+		end
+		name = rubify_name(name)
+		return [type, name]
+	end
+	# support c_code &&/|| args + ret_type?
+		# dll.add_function('InternetTimeToSystemTime', 'BOOL', [
+		# 	['PDWORD', 'lpszTime', 'in'],
+		# 	['UNK', '*pst', 'out'],
+		# 	['DWORD', 'dwReserved', 'in'],
+		# ])
+
+	# Turn a C-like name into a ruby-friendly name
+	def rubify_name(cname)
+		tmp = cname.gsub(/::/, '/') # replace :: with /
+		tmp = tmp.gsub('*', '') # replace * with nothing
+		if tmp =~ /[A-Z]/ # if there are any capital letters
+			tmp = tmp.gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2') # replace
+			tmp = tmp.gsub(/([a-z\d])([A-Z])/,'\1_\2') # replace
+		end
+		tmp.tr("-", "_").downcase # in case a "*" makes it this far
+	end
+
+	def garden(rg_args = @yard)
+		#
+		# @TODO:  Need Description down here
+		#
+		#puts "parsing:#{rg_args.to_s}"
+		plants = []
+		if rg_args.class == Array # or maybe Hash { 'ret' => 'BOOL', 'args' => [ [], [], [] ] }
+			# do some stuff, 
+		elsif rg_args.to_s
+			ret_type = 'BOOL'
+			# we assume it's formatted c/cpp code
+			rg_args.lines do |line|
+				#puts "processing the line:#{line}"
+				parts = line.split(',')
+				if line =~ /\(/
+					# then consider it the first line
+					ret_type = parts[1].gsub("'","") # BOOL etc
+					type, name = translate(ret_type, "return", "ret")
+					plants << YardTag.new('@return', type, "return", "description")
+				elsif line =~ /\[.+\]/
+					#puts "Found param line"
+					# it's a param line
+					type = parts[0].gsub("'","").sub("[","").strip # PDWORD etc
+					name = parts[1].gsub("'","").strip # lpszTime etc
+					dir =  parts[2].gsub("'","").sub("]","").strip # in/out etc
+					type, name = translate(type, name, dir)
+					#
+					# @TODO:  need description, but also need to handle the opts = {} case
+					plants << YardTag.new("@param", type, name, "description")
+				end
+			end
+		end
+		plants
+	end
+
+end # YardTagFactory
+
 # def get_method_name(page)
 # 	# uses the page title
 # 	t = page.title
@@ -611,4 +754,10 @@ end
 puts
 puts orig_msdn_method.get_dll_dry_helper_function
 puts
+puts "Attempting to get YARD doc"
+factory = YardTagFactory.new
+factory.yard = orig_msdn_method.railgun_code
+ydocs = factory.garden
+puts "Displaying YARD"
+puts ydocs.inspect
 
