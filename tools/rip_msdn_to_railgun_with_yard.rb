@@ -31,13 +31,14 @@ class MsdnMethod
 
 	include Comparable
 
-	attr_reader :source, :nokodoc, :dll_name, :yard_factory
+	attr_reader :source, :description, :nokodoc, :dll_name, :yard_factory # :return_desc, :remarks, :note
 	attr_reader :c_args, :c_ret_type, :c_name, :c_code # c_args are really railgun args ATM.
 	attr_reader :ruby_args, :ruby_ret_type, :ruby_name, :ruby_code, :ruby_yard_tags
 	attr_reader :railgun_args, :railgun_ret_type, :railgun_name, :railgun_code 
 
 	# various constants we'll need to reference
 	INDENT = "\t"
+	DESCRIPTION_XPATH = "div[@id='mainSection']"
 	DLL_NAME_XPATH = "//div[@id='page']//div[@id='body']//div[@id='leftNav']//div[@id='tocnav']//div[@class='toclevel1']"
 	ALL_FXNS_XPATH = "//div[@id='page']//div[@id='body']//div[@id='leftNav']//div[@id='tocnav']//div[@class='toclevel2']"
 	CODE_SNIP_CONTAINER_XPATH = "//div[@class='codeSnippetContainer']" # e.g. id="code-snippet-1"
@@ -520,8 +521,25 @@ private :run_dll_function
 
 	def parse_main_section(ms_nodeset)
 		node = ms_nodeset.first
-		# ns.first.children.each {|e| puts e.text if e.text == "Parameters"}
+		#node.children.each {|e| puts e.text if e.name == "p"} #if e.text == "Parameters"}
 		ns = node.children
+		paragraphs = ns.select {|child| child.name == "p"}
+		idx = 0
+		@description = paragraphs[idx]
+		@description = @description.text.strip if @description
+		# @TODO:  Good enuf for now, we could also pull remarks and notes etc with
+		# various h's and p's etc
+		# n = paragraphs[1]
+		# if n and n.text =~ /The function has no parameters/i
+		# 	idx += 2 if not n # typical when the function has no parameters
+		# else
+		# 	idx += 1
+		# end
+		# @ret = paragraphs[idx]
+		# @ret = @ret.text.strip if @ret
+		# //div[@id='mainSection']//p[@class='note'] # this is where the amplifying note lives
+		# puts "desc = #{@description.to_s}"
+		# puts "ret = #{@ret.to_s}"
 		ns.each_with_index do |elem, idx|
 			case elem.text.strip
 			when "Parameters"
@@ -745,7 +763,11 @@ c_disp, rg_disp, ruby_disp, yard_disp = [],[],[],[]
 msdn_methods.each do |m|
 	c_disp << m.c_code
 	rg_disp << m.railgun_code
-	ruby_disp << "\n#\n#{m.ruby_yard_tags_comment_block}\n#\n#{m.ruby_code}"
+	total_ruby_disp = "#\n"
+	# sometimes the description comes back w/embedded newlines so we need to add the leading # to all
+	m.description.lines {|line| total_ruby_disp += "# #{line}"}
+	total_ruby_disp += "\n#\n#{m.ruby_yard_tags_comment_block}\n#\n#{m.ruby_code}"
+	ruby_disp << total_ruby_disp
 end
 # Final display
 inform "Results:"
