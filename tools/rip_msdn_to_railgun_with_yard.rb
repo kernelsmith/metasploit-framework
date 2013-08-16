@@ -31,9 +31,9 @@ class MsdnMethod
 
 	include Comparable
 
-	attr_reader :source, :nokodoc, :dll_name
+	attr_reader :source, :nokodoc, :dll_name, :yard_factory
 	attr_reader :c_args, :c_ret_type, :c_name, :c_code # c_args are really railgun args ATM.
-	attr_reader :ruby_args, :ruby_ret_type, :ruby_name, :ruby_code
+	attr_reader :ruby_args, :ruby_ret_type, :ruby_name, :ruby_code, :ruby_yard_tags
 	attr_reader :railgun_args, :railgun_ret_type, :railgun_name, :railgun_code 
 
 	# various constants we'll need to reference
@@ -135,16 +135,16 @@ class MsdnMethod
 	}
 
 	def initialize(page)
-		puts "Creating nokogiri doc for #{page}..."
+		#puts "Creating nokogiri doc for #{page}..."
 		# +page+ should be either a local file to read, or a url to scrape, or anything else Nokogiri::HTML(open()) can handle
 		# http://msdn.microsoft.com/en-us/library/windows/desktop/aa384247(v=vs.85).aspx
 		@nokodoc = Nokogiri::HTML(open(page))
 		puts "Done."
 		@source = page
+		@yard_factory = YardTagFactory.new
 	end
 
 	def parse
-		puts "Parsing #{source}"
 		@dll_name = nokodoc.xpath(DLL_NAME_XPATH).text.strip.split(/\s/).first.downcase
 		all_code_snippet_containers = nokodoc.xpath(CODE_SNIP_CONTAINER_XPATH)
 		# until forced to do something fancier, we only parse the first code sample we encounter
@@ -178,8 +178,11 @@ class MsdnMethod
 		main_section = nokodoc.xpath(MAIN_SECTION_XPATH)
 		return unless main_section # we couldn't find any other info to look at
 		parse_main_section(main_section)
-		# add comments to railgun output, add yard to ruby output, create ruby output
+		# @todo add comments to railgun output
 		@ruby_code = rubify_code(@c_name, @ruby_name, @ruby_args)
+		# YARD
+		@ruby_yard_tags = yard_factory.garden(@railgun_code)
+		true
 	end
 
 	def header(type)
@@ -197,6 +200,14 @@ class MsdnMethod
 		puts header("Ruby")
 	end
 
+	def ruby_yard_tags_as_comments
+		ruby_yard_tags.collect {|y| y.to_comment}
+	end
+
+	def ruby_yard_tags_comment_block
+		self.ruby_yard_tags_as_comments.join("\n")
+	end
+
 	def get_remaining_dll_function_urls
 		all_functions_ns = nokodoc.xpath(ALL_FXNS_XPATH)
 		all_function_urls = []
@@ -208,13 +219,14 @@ class MsdnMethod
 	end
 
 	def get_dll_dry_helper_function
-%q~This method helps DRY out our code and provides basic error handling and messaging.
-It only returns the "return" part of the hash returned by railgun, unless there is an error
+%q~#
+# This method helps DRY out our code and provides basic error handling and messaging.
+# It only returns the "return" part of the hash returned by railgun, unless there is an error
 # @example run_dll_function(:wininet, :InternetOpen, nil, "my ua string", "INTERNET_OPEN_TYPE_DIRECT", nil, nil, 0)
-# @todo finish this yard doc
 # @param [Symbol] DLL name as a Symbol
 # @param [Symbol] C Function name as a Symbol
 # @param [String, nil] Custom error message to use instead of dyanmically generated message
+# @todo finish this yard doc
 # @param Variable number of additional args as needed
 # @return varies depending on the C-function that is called
 def run_dll_function(dll_as_sym, function_name_as_sym, custom_error_msg = nil, *function_args)
@@ -333,16 +345,8 @@ private :run_dll_function
 		# s.gsub!(160.chr, '') # nbsp
 	end
 
-	def get_yard_from_c_code(c_code)
-
-	end
-
-	def get_railgun_from_c(c_code)
-
-	end
-
 	def get_c_ret_type_and_func_name(line)
-		puts "Determining return type and function name from:\n#{line}"
+		#puts "Determining return type and function name from:\n#{line}"
 		parts = line.split(/\s+/) # always returns an array, even an empty one
 
 		c_ret_type = "UNK"
@@ -552,7 +556,7 @@ private :run_dll_function
 end # MsdnMethod
 
 class YardTag
-	attr_accessor :tag, :description # :name
+	attr_accessor :tag, :description # @todo
 	attr_reader :arg_name, :arg_type
 	
 	def initialize(tag = "@param", arg_type = "String", arg_name, description)
@@ -580,16 +584,22 @@ class YardTag
 		end
 	end
 
+	def to_comment
+		"# #{self.to_s}"
+	end
+
 end # YardTag
 
 # @example factory = YardTagFactory.new(c_code).new; tags = factory.garden;
-#   factory.yard = new_c_code; tags = factory.garden
+# @example factory ||= YardTagFactory.new; factory.yard = more_c_code; tags = factory.garden
+# @example factory = YardTagFactory.new; tags = factory.garden(c_code)
 class YardTagFactory
-	attr_accessor :default_arg_type, :default_description, :default_tag, :yard
+	attr_accessor :yard, :default_tag, :default_description # @todo
 
-	def initialize(yard = '', default_tag = "@param")
-		@default_tag = default_tag
+	def initialize(yard = '', default_tag = "@param", default_description = "description TBD")
 		@yard = yard
+		@default_tag = default_tag
+		@default_description = default_description
 	end
 
 	def translate(*rg_formatted_arg)
@@ -630,10 +640,10 @@ class YardTagFactory
 			else
 				"Unknown"
 			end
-		#when "inout"
+		#when "inout" # for now, this is treat the same as 'out'
 			#
 		else
-			#barf
+			#barf?
 		end
 		name = rubify_name(name)
 		return [type, name]
@@ -661,6 +671,7 @@ class YardTagFactory
 		# @TODO:  Need Description down here
 		#
 		#puts "parsing:#{rg_args.to_s}"
+		description = nil || default_description # @todo do some parsing, or default_description
 		plants = []
 		if rg_args.class == Array # or maybe Hash { 'ret' => 'BOOL', 'args' => [ [], [], [] ] }
 			# do some stuff, 
@@ -673,8 +684,9 @@ class YardTagFactory
 				if line =~ /\(/
 					# then consider it the first line
 					ret_type = parts[1].gsub("'","") # BOOL etc
+					#puts "we think we found a 'first line' for #{line}"
 					type, name = translate(ret_type, "return", "ret")
-					plants << YardTag.new('@return', type, "return", "description")
+					plants << YardTag.new('@return', type, "return", description)
 				elsif line =~ /\[.+\]/
 					#puts "Found param line"
 					# it's a param line
@@ -684,11 +696,11 @@ class YardTagFactory
 					type, name = translate(type, name, dir)
 					#
 					# @TODO:  need description, but also need to handle the opts = {} case
-					plants << YardTag.new("@param", type, name, "description")
+					plants << YardTag.new(default_tag, type, name, description)
 				end
 			end
 		end
-		plants
+		plants # give me all the created YardTag objects
 	end
 
 end # YardTagFactory
@@ -704,54 +716,52 @@ end # YardTagFactory
 # 	return t
 # end
 
+def inform(msg = nil)
+	msg.respond_to?(:to_s) ? puts("[*] #{msg.to_s}") : puts()
+end
+
+inform "Parsing #{source}"
 orig_msdn_method = MsdnMethod.new(source)
 orig_msdn_method.parse
-if not additional # nobody like unless...else statements
-	orig_msdn_method.display
-else
+msdn_methods = [orig_msdn_method]
+if additional
+	inform "Enumerating related functions..."
 	remaining_function_urls = orig_msdn_method.get_remaining_dll_function_urls
-	puts "Enumerating related functions..."
-
 	#puts all_function_urls.inspect
-	puts "Done.  Parsing enumerated functions and displaying results..."
-	msdn_methods = [orig_msdn_method]
-	urls_to_parse = remaining_function_urls[0..additional] # this needs to change, slice maybe?
+	inform "Done.  Parsing enumerated functions..."
+	urls_to_parse = remaining_function_urls[0..additional]
 	urls_to_parse.each do |h|
 		#puts "Passing #{a.inspect} to parser"
 		msdn_method = MsdnMethod.new(h[:url])
+		inform "Parsing #{h[:url]}"
 		msdn_method.parse
 		msdn_methods << msdn_method
 	end
-	# sort is broken for some reason I don't understand atm.
-	#msdn_methods.sort!
-	c_disp, rg_disp, ruby_disp = [],[],[]
-	msdn_methods.each do |m|
-		c_disp << m.c_code
-		rg_disp << m.railgun_code
-		ruby_disp << m.ruby_code
-	end
-	puts
-	puts "[*]  C/C++ Code:"
-	puts "---------------------------------------------------"
-	c_disp.each {|d| puts d;puts}
-	puts
-	puts "[*]  Railgun Code:"
-	puts "---------------------------------------------------"
-	rg_disp.each {|d| puts d;puts}
-	puts
-	puts "[*]  Ruby Code:"
-	puts "---------------------------------------------------"
-	ruby_disp.each {|d| puts d;puts}
-	puts
-	puts "# Parsed #{msdn_methods.length} functions"
 end
+# sort was broken, but I think it's fixed now
+msdn_methods.sort!
+# prep to display w/code grouped together by type/lang
+c_disp, rg_disp, ruby_disp, yard_disp = [],[],[],[]
+msdn_methods.each do |m|
+	c_disp << m.c_code
+	rg_disp << m.railgun_code
+	ruby_disp << "\n#\n#{m.ruby_yard_tags_comment_block}\n#\n#{m.ruby_code}"
+end
+# Final display
+inform "Results:"
+inform
+inform "C/C++ Code:"
+puts "---------------------------------------------------"
+c_disp.each {|str_block| puts str_block;puts} # str_block is a block of code string
 puts
-puts orig_msdn_method.get_dll_dry_helper_function
+inform "Railgun Code:"
+puts "---------------------------------------------------"
+rg_disp.each {|str_block| puts str_block;puts} 
 puts
-puts "Attempting to get YARD doc"
-factory = YardTagFactory.new
-factory.yard = orig_msdn_method.railgun_code
-ydocs = factory.garden
-puts "Displaying YARD"
-puts ydocs.inspect
-
+inform "Ruby Code:"
+puts "---------------------------------------------------"
+ruby_disp.each {|str_block| puts str_block;puts} 
+puts
+puts orig_msdn_method.get_dll_dry_helper_function # this could be msdn_methods.first.get_blah too
+puts
+inform "# All parsing complete.  Parsed #{msdn_methods.length} functions."
