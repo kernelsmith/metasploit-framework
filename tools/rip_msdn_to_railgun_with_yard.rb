@@ -31,7 +31,7 @@ class MsdnMethod
 
 	include Comparable
 
-	attr_reader :source, :description, :nokodoc, :dll_name, :yard_factory # :return_desc, :remarks, :note
+	attr_reader :source, :description, :nokodoc, :dll_name, :yard_factory, :param_infos, :return_desc, :reqs
 	attr_reader :c_args, :c_ret_type, :c_name, :c_code # c_args are really railgun args ATM.
 	attr_reader :ruby_args, :ruby_ret_type, :ruby_name, :ruby_code, :ruby_yard_tags
 	attr_reader :railgun_args, :railgun_ret_type, :railgun_name, :railgun_code 
@@ -135,6 +135,24 @@ class MsdnMethod
 		'UNK'      => 'Unknown'
 	}
 
+	def self.remove_artifact(str)
+		#puts "Cleaning:\n#{str}"
+		s = str.force_encoding("ASCII-8BIT")
+		s.gsub!(/^\s*$/,'')
+		s.gsub!(/\P{ASCII}/, ' ') # nuke all non-ascii chars for now (esp 0xA0 and 0xC2 etc)
+		s.squeeze!(" ")
+		s.strip!
+	end
+
+	def self.commentify(str)
+		# we use the lines method in case there are embedded newlines
+		accum = ''
+		str.lines do |line|
+			accum += line =~ /^ *#/ ? "#{line}\n" : "# #{line}\n"
+		end
+		accum
+	end
+
 	def initialize(page)
 		#puts "Creating nokogiri doc for #{page}..."
 		# +page+ should be either a local file to read, or a url to scrape, or anything else Nokogiri::HTML(open()) can handle
@@ -182,7 +200,7 @@ class MsdnMethod
 		# @todo add comments to railgun output
 		@ruby_code = rubify_code(@c_name, @ruby_name, @ruby_args)
 		# YARD
-		@ruby_yard_tags = yard_factory.garden(@railgun_code)
+		@ruby_yard_tags = yard_factory.garden(self)
 		true
 	end
 
@@ -202,7 +220,11 @@ class MsdnMethod
 	end
 
 	def ruby_yard_tags_as_comments
-		ruby_yard_tags.collect {|y| y.to_comment}
+		if ruby_yard_tags and not ruby_yard_tags.empty?
+			ruby_yard_tags.collect {|y| y.to_comment}
+		else
+			["# "]
+		end
 	end
 
 	def ruby_yard_tags_comment_block
@@ -259,6 +281,10 @@ private :run_dll_function
 
 	private
 
+	def cc(str)
+		MsdnMethod.commentify(str)
+	end
+
 	def rubify_name(cname)
 		tmp = cname.gsub(/::/, '/')
 		tmp = tmp.gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2')
@@ -271,12 +297,13 @@ private :run_dll_function
 		res = ""
 		arr = []
 		if ruby_arguments.length > 3
-			res += "# There are quite a few arguments so an opts hash was added.  To clean\n"
-			res += "# up the API, you should review it and adjust as needed.  You may want\n"
-			res += "# to consider regrouping args for: clarity, so args that are usually\n"
-			res += "# left at default values, or are optional, or always a specific value,\n"
-			res += "# etc, are put in the opts hash.  Or, you may want to get rid of the\n"
-			res += "# opts hash entirely.\n"
+
+			res += cc("There are quite a few arguments so an opts hash was added.  To clean")
+			res += cc("up the API, you should review it and adjust as needed.  You may want")
+			res += cc("to consider regrouping args for: clarity, so args that are usually")
+			res += cc("left at default values, or are optional, or always a specific value,")
+			res += cc("etc, are put in the opts hash.  Or, you may want to get rid of the")
+			res += cc("opts hash entirely.")
 			first_three = ruby_arguments[0..2]
 			opts_args = ruby_arguments[3..-1]
 			first_three << "opts = {}"
@@ -322,28 +349,12 @@ private :run_dll_function
 						#puts "#{code_containers.length} code_containers"
 						# for now, we assume there is only one of these (not a bad assumption)
 						the_code = code_containers[0].text
-						return cleanup_code(the_code)
+						return MsdnMethod.remove_artifact(the_code)
 					end
 				end
 			end
 		end
 		return nil
-	end
-
-	def cleanup_code(str)
-		#puts "Cleaning:\n#{str}"
-		s = str.force_encoding("ASCII-8BIT")
-		s.gsub!(/^\s*$/,'')
-		s = clean_html(s)
-		s.squeeze!(" ")
-		s.strip!
-	end
-
-	def clean_html(str)
-		# nuke all non-ascii chars for now (esp 0xA0 and 0xC2 etc)
-		str.gsub(/\P{ASCII}/, ' ')
-		# s.gsub!(194.chr, '') # "box char"
-		# s.gsub!(160.chr, '') # nbsp
 	end
 
 	def get_c_ret_type_and_func_name(line)
@@ -524,18 +535,18 @@ private :run_dll_function
 		#node.children.each {|e| puts e.text if e.name == "p"} #if e.text == "Parameters"}
 		ns = node.children
 		paragraphs = ns.select {|child| child.name == "p"}
-		idx = 0
-		@description = paragraphs[idx]
-		@description = @description.text.strip if @description
+		indx = 0
+		@description = paragraphs[indx]
+		@description = @description.text.strip.gsub(/\n/,'') if @description
 		# @TODO:  Good enuf for now, we could also pull remarks and notes etc with
 		# various h's and p's etc
 		# n = paragraphs[1]
 		# if n and n.text =~ /The function has no parameters/i
-		# 	idx += 2 if not n # typical when the function has no parameters
+		# 	indx += 2 if not n # typical when the function has no parameters
 		# else
-		# 	idx += 1
+		# 	indx += 1
 		# end
-		# @ret = paragraphs[idx]
+		# @ret = paragraphs[indx]
 		# @ret = @ret.text.strip if @ret
 		# //div[@id='mainSection']//p[@class='note'] # this is where the amplifying note lives
 		# puts "desc = #{@description.to_s}"
@@ -543,32 +554,70 @@ private :run_dll_function
 		ns.each_with_index do |elem, idx|
 			case elem.text.strip
 			when "Parameters"
-				parse_params_ns(ns.at(idx+2).children)
+				# gets [[name, descript],]
+				@param_infos = parse_params_ns(ns.at(idx+2))
 			when "Return value"
-				parse_retval_ns(ns.at(idx+2).children)
+				# gets retval text
+				@return_desc = parse_retval_ns(ns.at(idx+2))
 			when "Remarks"
-				parse_rems_ns(ns.at(idx+2).children)
+				# just skip this for now
+				# parse_rems_ns(ns.at(idx+2))
 			when "Requirements"
-				parse_reqs_ns(ns.at(idx+2).children)
+				# gets [[type, value],]
+				@reqs = parse_reqs_ns(ns.at(idx+2))
 				break # no reason to keep parsing
 			end
 		end
 	end
 
 	def parse_params_ns(nodeset)
-
+		#inform "Looking for parameters in #{nodeset.to_s}"
+		descripts = []
+		names = []
+		# someday could use something like if node.href add tag "@see #{node.href}"
+		nodeset.children.each do |node|
+			#puts "node is:#{node.to_s}"
+			if node.name == "dt"
+				#puts "Child:dt text:#{node.text.strip}"
+				names << node.text.strip
+			elsif node.name == "dd"
+				#puts "Child:dd text:#{node.text.strip}"
+				# We take the first sentence only to hopefully avoid getting sued.
+				descripts << node.text.strip.split(/\./).first.gsub(/\n/,'')
+			end
+		end
+		#names.each_with_index {|name,idx| puts("name:#{name}, descript:#{descripts[idx]}")}
+		names.zip(descripts)
 	end
 
 	def parse_retval_ns(nodeset)
-
+		txt = nodeset.text
+		txt.strip.gsub(/\n/,' ') if txt
 	end
 
 	def parse_rems_ns(nodeset)
-
+		# it's not worth parsing this and would probably get us sued.
+		#puts "Found remarks nodeset"
+		#puts nodeset.children
 	end
 
 	def parse_reqs_ns(nodeset)
-
+		keys = []
+		values = []
+		#puts nodeset.children
+		nodeset.children.each do |node|
+			if node.name == "tr"
+				node.children.each do |trnode|
+					if trnode.name == "th"
+						keys << trnode.text.strip
+					elsif trnode.name == "td"
+						values << MsdnMethod.remove_artifact(trnode.text.strip)
+					end
+				end
+			end
+		end
+		#keys.each_with_index {|key,idx| puts("#{key}:#{values[idx]}")}
+		keys.zip(values)
 	end
 
 end # MsdnMethod
@@ -608,14 +657,14 @@ class YardTag
 
 end # YardTag
 
+# @example factory = YardTagFactory.new; factory.source = an_msdn_method; tags = factory.garden
 # @example factory = YardTagFactory.new(c_code).new; tags = factory.garden;
 # @example factory ||= YardTagFactory.new; factory.yard = more_c_code; tags = factory.garden
 # @example factory = YardTagFactory.new; tags = factory.garden(c_code)
 class YardTagFactory
-	attr_accessor :yard, :default_tag, :default_description # @todo
+	attr_accessor :yard, :default_tag, :default_description, :source
 
-	def initialize(yard = '', default_tag = "@param", default_description = "description TBD")
-		@yard = yard
+	def initialize(default_tag = "@param", default_description = "description TBD")
 		@default_tag = default_tag
 		@default_description = default_description
 	end
@@ -684,38 +733,59 @@ class YardTagFactory
 		tmp.tr("-", "_").downcase # in case a "*" makes it this far
 	end
 
-	def garden(rg_args = @yard)
+	def garden(src) # (rg_code = @yard)
 		#
 		# @TODO:  Need Description down here
 		#
-		#puts "parsing:#{rg_args.to_s}"
-		description = nil || default_description # @todo do some parsing, or default_description
+		#inform "Gardening a:#{src.class.to_s}"
+		desc = default_description
+		if src.class == MsdnMethod
+			#inform "Getting the rg code from the msdn method"
+			rg_code = src.railgun_code
+			#inform "rg code is:\n#{rg_code}"
+		elsif src.respond_to?(:to_s)
+			rg_code = src.to_s
+		end
 		plants = []
-		if rg_args.class == Array # or maybe Hash { 'ret' => 'BOOL', 'args' => [ [], [], [] ] }
-			# do some stuff, 
-		elsif rg_args.to_s
-			ret_type = 'BOOL'
-			# we assume it's formatted c/cpp code
-			rg_args.lines do |line|
-				#puts "processing the line:#{line}"
-				parts = line.split(',')
-				if line =~ /\(/
-					# then consider it the first line
-					ret_type = parts[1].gsub("'","") # BOOL etc
-					#puts "we think we found a 'first line' for #{line}"
-					type, name = translate(ret_type, "return", "ret")
-					plants << YardTag.new('@return', type, "return", description)
-				elsif line =~ /\[.+\]/
-					#puts "Found param line"
-					# it's a param line
-					type = parts[0].gsub("'","").sub("[","").strip # PDWORD etc
-					name = parts[1].gsub("'","").strip # lpszTime etc
-					dir =  parts[2].gsub("'","").sub("]","").strip # in/out etc
-					type, name = translate(type, name, dir)
-					#
-					# @TODO:  need description, but also need to handle the opts = {} case
-					plants << YardTag.new(default_tag, type, name, description)
+		ret_type = 'BOOL'
+		# we assume it's well formatted c/cpp code
+		param_ctr = 0
+		rg_code.lines do |line|
+			#puts "processing the line:#{line}"
+			parts = line.split(',')
+			next if line =~ /^\s*$/
+			if line =~ /\(/
+				# then consider it the first line
+				ret_type = parts[1].gsub("'","") # BOOL etc
+				#puts "we think we found a 'first line' for #{line}"
+				type, name = translate(ret_type, "return", "ret")
+				desc = src.class == MsdnMethod ? src.return_desc.split('.').first.gsub(/\n/,'') : "returns a #{type}"
+				plants << YardTag.new('@return', type, "return", desc)
+			elsif line =~ /\[.+\]/
+				#puts "Found param line"
+				# it's a param line
+				type = parts[0].gsub("'","").sub("[","").strip # PDWORD etc
+				name = parts[1].gsub("'","").strip # lpszTime etc
+				dir =  parts[2].gsub("'","").sub("]","").strip # in/out etc
+				type, name = translate(type, name, dir)
+				#
+				# @TODO:  need description, but also need to handle the opts = {} case
+				#inform "Param infos are:\n#{src.param_infos}"
+				desc = default_description
+				if src.class == MsdnMethod
+					pi = src.param_infos
+					#inform "PI is #{pi.to_s}"
+					if pi
+						a = pi[param_ctr]
+						if a and not a.empty?
+							desc = a[1]
+						end
+					end
 				end
+				param_ctr += 1 # this ghetto, we're assuming params_info and args are synched
+
+				#inform "Creating new yard tag with:#{default_tag}, #{type}, #{name}, #{desc}"
+				plants << YardTag.new(default_tag, type, name, desc)
 			end
 		end
 		plants # give me all the created YardTag objects
@@ -756,8 +826,8 @@ if additional
 		msdn_methods << msdn_method
 	end
 end
-# sort was broken, but I think it's fixed now
-msdn_methods.sort!
+# sort was broken, but I think it's fixed now and NO
+#msdn_methods.sort!
 # prep to display w/code grouped together by type/lang
 c_disp, rg_disp, ruby_disp, yard_disp = [],[],[],[]
 msdn_methods.each do |m|
@@ -765,17 +835,21 @@ msdn_methods.each do |m|
 	rg_disp << m.railgun_code
 	total_ruby_disp = "#\n"
 	# sometimes the description comes back w/embedded newlines so we need to add the leading # to all
-	m.description.lines {|line| total_ruby_disp += "# #{line}"}
-	total_ruby_disp += "\n# @see #{m.source} #{m.c_name}\n#\n"
-	total_ruby_disp += "#{m.ruby_yard_tags_comment_block}\n#\n#{m.ruby_code}"
+	if m.description and not m.description.empty?
+		total_ruby_disp += MsdnMethod.commentify(m.description)
+	else
+		total_ruby_disp += MsdnMethod.commentify "No description found"
+	end
+	total_ruby_disp += MsdnMethod.commentify "@see #{m.source} #{m.c_name}\n" if m.c_name # don't think this would ever not be
+	total_ruby_disp += "#{m.ruby_yard_tags_comment_block}\n#\n#{m.ruby_code}" if (m.ruby_yard_tags_comment_block and m.ruby_code)
 	ruby_disp << total_ruby_disp
 end
 # Final display
 inform "Results:"
 inform
-inform "C/C++ Code:"
-puts "---------------------------------------------------"
-c_disp.each {|str_block| puts str_block;puts} # str_block is a block of code string
+# inform "C/C++ Code:"
+# puts "---------------------------------------------------"
+# c_disp.each {|str_block| puts str_block;puts} # str_block is a block of code string
 puts
 inform "Railgun Code:"
 puts "---------------------------------------------------"
@@ -787,4 +861,4 @@ ruby_disp.each {|str_block| puts str_block;puts}
 puts
 puts orig_msdn_method.get_dll_dry_helper_function # this could be msdn_methods.first.get_blah too
 puts
-inform "# All parsing complete.  Parsed #{msdn_methods.length} functions."
+inform "********** All parsing complete.  Parsed #{msdn_methods.length} functions."
