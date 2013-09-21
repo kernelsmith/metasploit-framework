@@ -4,6 +4,9 @@
 require 'nokogiri'
 require 'open-uri'
 
+#
+# Handle CLI arguments
+#
 url = nil
 source = nil
 additional = nil
@@ -197,8 +200,8 @@ class MsdnMethod
 		main_section = nokodoc.xpath(MAIN_SECTION_XPATH)
 		return unless main_section # we couldn't find any other info to look at
 		parse_main_section(main_section)
-		# @todo add comments to railgun output
-		@ruby_code = rubify_code(@c_name, @ruby_name, @ruby_args)
+		ret_type_is_bool = @c_ret_type =~ /^bool/i ? true : false
+		@ruby_code = rubify_code(@c_name, @ruby_name, @ruby_args, ret_type_is_bool)
 		# YARD
 		@ruby_yard_tags = yard_factory.garden(self)
 		true
@@ -272,11 +275,7 @@ private :run_dll_function
 	end
 
 	def <=>(other)
-		if self.c_name == other.c_name
-			self.source <=> other.source
-		else
-			self.c_name <=> other.c_name
-		end
+		self.c_name <=> other.c_name
 	end
 
 	private
@@ -293,11 +292,11 @@ private :run_dll_function
 		tmp.gsub('*','').tr("-", "_").downcase
 	end
 
-	def rubify_code(c_method_name, ruby_method_name, ruby_arguments)
+	def rubify_code(c_method_name, ruby_method_name, ruby_arguments, bool = false)
 		res = ""
 		arr = []
 		if ruby_arguments.length > 3
-
+			res += cc("README & DELETE ME")
 			res += cc("There are quite a few arguments so an opts hash was added.  To clean")
 			res += cc("up the API, you should review it and adjust as needed.  You may want")
 			res += cc("to consider regrouping args for: clarity, so args that are usually")
@@ -310,22 +309,24 @@ private :run_dll_function
 			res += "def _#{ruby_method_name}(#{first_three.join(', ')})\n"
 			res += "#{INDENT}defaults = {  # defaults for args in opts hash\n"
 			opts_args.each do |arg|
-				res += "#{INDENT}#{INDENT}:#{arg} => #{arg}_default\n"
+				res += "#{INDENT}#{INDENT}:#{arg} => #{arg}_default # CHANGEME\n"
 			end
 			res += "#{INDENT}}\n\n"
-			res += "#{INDENT}Merge in defaults. This approach allows caller to safely pass in a nil\n"
+			res += "# #{INDENT}Merge in defaults. This approach allows caller to safely pass in a nil\n"
 			res += "#{INDENT}opts = defaults.merge(opts)\n"
 			first_three.pop
 			arr = [":"+dll_name, ":"+c_method_name] + first_three
 			res += "\n#{INDENT}# Any arg validation can go here\n\n"
 			res += "#{INDENT}ret = run_dll_function(#{arr.join(", ")},\n"
-			opts_args.each {|arg| res += "#{INDENT}#{INDENT}opts[#{arg}],\n"}
+			opts_args.each {|arg| res += "#{INDENT}#{INDENT}opts[:#{arg}],\n"}
 			res += "#{INDENT})\n"
 		else
 			res += "def _#{ruby_method_name}(#{ruby_arguments.join(', ')})\n"
 			res += "\n#{INDENT}# Any arg validation can go here\n\n" if ruby_arguments.length > 0
 			arr = [":"+dll_name, ":"+c_method_name] + ruby_arguments
-			res += "#{INDENT}ret = run_dll_function(#{arr.join(", ")})\n"
+			res += "#{INDENT}"
+			res += "ret = " unless bool # don't add this if ret is BOOL cuz prob won't need
+			res += "run_dll_function(#{arr.join(", ")})\n"
 		end
 		res += "\n#{INDENT}# Additional code goes here\n\n"
 		res += "end\n"
@@ -632,7 +633,7 @@ class YardTag
 		arg_type = arg_type.to_s.strip.capitalize
 		@arg_type = arg_type =~ /^\[[A-Z][a-z]{2,}\]$/ ? arg_type : "[#{arg_type}]"
 		@arg_name = arg_name
-		@description = description
+		@description = description.gsub(/^This parameter /, "Parameter ")
 		#@name = arg_name # might not be needed at all, tbd
 	end
 	# Use this for an opts hash
