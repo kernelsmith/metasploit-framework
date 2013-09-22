@@ -93,6 +93,7 @@ module Browser
 	#
 	def default_browser
 		# @TODO actually write this
+		raise NotImplementedError "default_browser is not yet implemented."
 
 		# serviceskey = "HKLM\\SYSTEM\\CurrentControlSet\\Services"
 		# a =[]
@@ -109,20 +110,20 @@ module Browser
 	# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384346(v=vs.85).aspx
 	#   InternetCheckConnection
 
-	# @return [Boolean] Returns TRUE if a connection is made successfully, or
-	#   FALSE otherwise
-	# @param [String] url a null-terminated string that specifies the URL to use
+	# @return [Boolean] Returns true if a connection is made successfully, or
+	#   false otherwise
+	# @param [String] url a null-terminated string specifying the URL to use
 	#   to check the connection.  May be hostname, IP address, or nil.
-	# @param [Fixnum] flags Control flags which may be 0 or 
-	#   FLAG_ICC_FORCE_CONNECTION which forces a connection. 
+	# @param [Fixnum] flags Control flags which may be 0 or
+	#   FLAG_ICC_FORCE_CONNECTION which forces a connection.
 	#   A sockets connection is attempted in the following order:
 	#   If +url+ is non-nil, the host value is extracted from it and used to
 	#     ping that specific host.
-	#   If +url+ is nil and there is an entry in the internal server database 
+	#   If +url+ is nil and there is an entry in the internal server database
 	#     for the nearest server,
 	#   the host value is extracted from the entry and used to ping that server.
 	# @param [Fixnum] reserved This parameter is reserved and must be 0
-	# @return [Boolean] true if a socket connection to url, or 'nearest 
+	# @return [Boolean] true if a socket connection to url, or 'nearest
 	#   server', is successful, else false
 	# @raise [RuntimeError] if InternetCheckConnection returns an error
 	def internet_check_connection(url, flags, reserved = 0)
@@ -138,26 +139,26 @@ module Browser
 	module Ie
 		# API for Internet Explorer manipulation, automation, and control etc
 
-		#
-		# The CleanupCredentialCache function is implemented by certain Security
-		#   Support Providers (SSP) to flush the SSP credential cache.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa383938(v=vs.85).aspx
-		#   CleanupCredentialCache
-		# @return [Boolean] TRUE if the function succeeds; otherwise, FALSE
-		#
-		def _cleanup_credential_cache()
-			run_dll_function(:wininet, :CleanupCredentialCache)
-		end
+		# Basic Process:
+		#                                  +- InternetQueryDataAvailable
+		# InternetOpen -> InternetOpenUrl -+- InternetReadFile
+		#                                  +- InternetSetFilePointer
+
+		# Advanced Process:                                   +- HttpAddRequestHeaders
+		#                                                     +- HttpQueryInfo
+		# InternetOpen -> InternetConnect -> HttpOpenRequest -+- HttpSenRequest
+		#                                                     +- HttpSendRequestEx
+		#                                                     +- InternetErrorDlg
 
 		#
 		# Adds one or more HTTP request headers to the HTTP request handle.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384227(v=vs.85).aspx
 		#   HttpAddRequestHeaders
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
-		# @param [Fixnum] request Handle returned by a call to the 
+		# @return [Boolean] Returns true if successful, or false otherwise
+		# @param [Fixnum] request Handle returned by a call to the
 		#   HttpOpenRequest function
-		# @param [String] headers Pointer to a string variable containing the 
+		# @param [String] headers String variable containing the
 		#   headers to append to the request
 		# @param [Fixnum] headers_length Size of lpszHeaders, in TCHARs
 		# @param [Fixnum] modifiers Controls the semantics of this function
@@ -185,7 +186,7 @@ module Browser
 		# Ends an HTTP request that was initiated by HttpSendRequestEx.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384230(v=vs.85).aspx
 		#   HttpEndRequest
-		# @return [Boolean] If the function succeeds, the function returns TRUE
+		# @return [Boolean] If the function succeeds, the function returns true
 		# @param [Fixnum] request Handle returned by HttpOpenRequest and sent by
 		#   HttpSendRequestEx
 		# @param [Nil] buffers_out Parameter is reserved and must be NULL
@@ -219,19 +220,19 @@ module Browser
 		#   HttpOpenRequest
 		# @return [Fixnum] Returns an HTTP request handle if successful, or NULL
 		#   otherwise
-		# @param [Fixnum] connect handle to an HTTP session returned by 
+		# @param [Fixnum] connect handle to an HTTP session returned by
 		#   InternetConnect
 		# @param [String] verb Contains the HTTP verb to use in the request
 		# @param [String] object_name Name of the target object to be retrieved.
 		#   Ggenerally a file name, an executable module, or search specifier.
 		# @param [String] version The HTTP version to use in the request
-		# @param [String] referer Specifies the URL of the document from which 
+		# @param [String] referer Specifies the URL of the document from which
 		#   the URL in the request (+object_name+) was obtained
-		# @param [String] accept_types Indicates media types accepted by the 
+		# @param [String] accept_types Indicates media types accepted by the
 		#   client @todo Array
 		# @param [Fixnum] flags Internet options
-		# @param [Fixnum] context A pointer to a variable that contains the 
-		#   application-defined value that associates this operation with any 
+		# @param [Fixnum] context A pointer to a variable that contains the
+		#   application-defined value that associates this operation with any
 		#   application data @todo
 		#
 		def _http_open_request(connect, verb, object_name, opts = {})
@@ -264,7 +265,7 @@ module Browser
 		# Retrieves header information associated with an HTTP request.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384238(v=vs.85).aspx HttpQueryInfo
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_request Handle returned by HttpOpenRequest or InternetOpenUrl
 		# @param [Fixnum] dw_info_level Combination of an attribute to be retrieved and flags that modify the request
 		# @param [Fixnum] lpv_buffer Pointer to a buffer to receive the requested information
@@ -301,9 +302,9 @@ module Browser
 		# Sends the specified request to the HTTP server, allowing callers to send extra data beyond what is normally passed to HttpSendRequestEx.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384247(v=vs.85).aspx HttpSendRequest
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_request Handle returned by HttpOpenRequest
-		# @param [Fixnum] lpsz_headers String  that contains the additional headers to be appended to the request
+		# @param [Fixnum] lpsz_headers String that contains the additional headers to be appended to the request
 		# @param [Fixnum] dw_headers_length Size of the additional headers, in TCHARs
 		# @param [Fixnum] lp_optional Pointer to a buffer containing any optional data to be sent immediately after the request headers
 		# @param [Fixnum] dw_optional_length Size of the optional data, in bytes
@@ -335,12 +336,12 @@ module Browser
 		end
 
 		#
-		# Sends the specified request to the HTTP server.  Recommend against 
-		# this method as it entails parsing complex data structs.  Use 
+		# Sends the specified request to the HTTP server.  Recommend against
+		# this method as it entails parsing complex data structs.  Use
 		# http_send_request instead
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384318(v=vs.85).aspx HttpSendRequestEx
 
-		# @return [Boolean] If the function succeeds, the function returns TRUE
+		# @return [Boolean] If the function succeeds, the function returns true
 		# @param [Fixnum] h_request The 						handle returned by HttpOpenRequest
 		# @param [Fixnum] lp_buffers_in Optional
 		# @param [Unknown] lp_buffers_out Reserved
@@ -380,16 +381,16 @@ module Browser
 		# Stores data in the specified file in the Internet cache and associates it with the specified URL.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/ff384269(v=vs.85).aspx CommitUrlCacheEntryA
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
-		# @param [Fixnum] lpsz_url_name Pointer to a string variable that contains the source name of the cache entry
-		# @param [Fixnum] lpsz_local_file_name Pointer to a string variable that contains the name of the local file that is being cached
+		# @return [Boolean] Returns true if successful, or false otherwise
+		# @param [Fixnum] lpsz_url_name String variable that contains the source name of the cache entry
+		# @param [Fixnum] lpsz_local_file_name String variable that contains the name of the local file that is being cached
 		# @param [Fixnum] expire_time FILETIME structure that contains the expire date and time (in Greenwich mean time) of the file that is being cached
 		# @param [Fixnum] last_modified_time FILETIME structure that contains the last modified date and time (in Greenwich mean time) of the URL that is being cached
 		# @param [Fixnum] cache_entry_type A bitmask indicating the type of cache entry and its properties
 		# @param [Fixnum] lp_header_info Pointer to the buffer that contains the header information
 		# @param [Fixnum] cch_header_info Size of the header information, in TCHARs
 		# @param [Fixnum] lpsz_file_extension This parameter is reserved and must be NULL
-		# @param [Fixnum] lpsz_original_url Pointer to a string  that contains the original URL, if redirection has occurred
+		# @param [Fixnum] lpsz_original_url String that contains the original URL, if redirection has occurred
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
 		# up the API, you should review it and adjust as needed.  You may want
@@ -429,16 +430,16 @@ module Browser
 		# Stores data in the specified file in the Internet cache and associates it with the specified URL.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/ff384270(v=vs.85).aspx CommitUrlCacheEntryW
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
-		# @param [Fixnum] lpsz_url_name Pointer to a string variable that contains the source name of the cache entry
-		# @param [Fixnum] lpsz_local_file_name Pointer to a string variable that contains the name of the local file that is being cached
+		# @return [Boolean] Returns true if successful, or false otherwise
+		# @param [Fixnum] lpsz_url_name String variable that contains the source name of the cache entry
+		# @param [Fixnum] lpsz_local_file_name String variable that contains the name of the local file that is being cached
 		# @param [Fixnum] expire_time FILETIME structure that contains the expire date and time (in Greenwich mean time) of the file that is being cached
 		# @param [Fixnum] last_modified_time FILETIME structure that contains the last modified date and time (in Greenwich mean time) of the URL that is being cached
 		# @param [Fixnum] cache_entry_type A bitmask indicating the type of cache entry and its properties
 		# @param [Fixnum] lp_header_info Pointer to the buffer that contains the header information
 		# @param [Fixnum] cch_header_info Size of the header information, in TCHARs
 		# @param [Fixnum] lpsz_file_extension This parameter is reserved and must be NULL
-		# @param [Fixnum] lpsz_original_url Pointer to a string  that contains the original URL, if redirection has occurred
+		# @param [Fixnum] lpsz_original_url String that contains the original URL, if redirection has occurred
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
 		# up the API, you should review it and adjust as needed.  You may want
@@ -478,10 +479,10 @@ module Browser
 		# The CreateMD5SSOHash function obtains the default Microsoft Passport password for a specified account or realm, creates an MD5 hash from it using a specified wide-character challenge string, and returns the result as a string of hexadecimal digit bytes.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa383962(v=vs.85).aspx CreateMD5SSOHash
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] psz_challenge_info Pointer to the wide-character challenge string to use for the MD5 hash
-		# @param [Fixnum] pwsz_realm Pointer to a string that names a realm for which to obtain the password
-		# @param [Fixnum] pwsz_target Pointer to a string that names an account for which to obtain the password
+		# @param [Fixnum] pwsz_realm String that names a realm for which to obtain the password
+		# @param [Fixnum] pwsz_target String that names an account for which to obtain the password
 		# @param [Unknown] pb_hex_hash Pointer to an output buffer into which the MD5 hash is returned in hex string format
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
@@ -513,7 +514,7 @@ module Browser
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa383993(v=vs.85).aspx
     #  DetectAutoProxyUrl
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] lpsz_auto_proxy_url Pointer to a buffer to receive the URL from which a WPAD autoproxy script can be downloaded
 		# @param [Fixnum] dw_auto_proxy_url_length Size of the buffer pointed to by lpszAutoProxyUrl, in bytes
 		# @param [Fixnum] dw_detect_flags Automation detection type
@@ -532,11 +533,11 @@ module Browser
 		# The FtpCommand function sends commands directly to an FTP server.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384133(v=vs.85).aspx FtpCommand
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_connect A handle returned from a call to InternetConnect
 		# @param [Unknown] f_expect_response A Boolean value that indicates whether the application expects a data connection to be established by the FTP server
 		# @param [Fixnum] dw_flags A parameter that can be set to one of the following values
-		# @param [Fixnum] lpsz_command A pointer to a string that contains the command to send to the FTP server
+		# @param [Fixnum] lpsz_command A String that contains the command to send to the FTP server
 		# @param [Fixnum] dw_context A pointer to a variable that contains an application-defined value used to identify the application context in callback operations
 		# @param [Fixnum] ph_ftp_command A pointer to a handle that is created if a valid data socket is opened
 		#
@@ -546,7 +547,7 @@ module Browser
 		# left at default values, or are optional, or always a specific value,
 		# etc, are put in the opts hash.  Or, you may want to get rid of the
 		# opts hash entirely.
-    # 
+    #
     # @todo, move all the ftp stuff somewhere?
     #
 		def _ftp_command(connect, expect_response, flags, opts = {})
@@ -575,7 +576,7 @@ module Browser
 		# Creates a new directory on the FTP server.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384136(v=vs.85).aspx FtpCreateDirectory
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_connect Handle returned by a previous call to InternetConnect using INTERNET_SERVICE_FTP
 		# @param [Fixnum] lpsz_directory String that contains the name of the directory to be created
 		#
@@ -593,7 +594,7 @@ module Browser
 		# Deletes a file stored on the FTP server.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384142(v=vs.85).aspx FtpDeleteFile
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_connect Handle returned by a previous call to InternetConnect using INTERNET_SERVICE_FTP
 		# @param [Fixnum] lpsz_file_name String that contains the name of the file to be deleted
 		#
@@ -613,10 +614,10 @@ module Browser
 
 		# @return [Fixnum] Returns a valid handle for the request if the directory enumeration was started successfully, or returns NULL otherwise
 		# @param [Fixnum] h_connect Handle to an FTP session returned from InternetConnect
-		# @param [Fixnum] lpsz_search_file String that specifies a valid directory path or file name for the FTP server's file system
+		# @param [Fixnum] lpsz_search_file String specifying a valid directory path or file name for the FTP server's file system
 		# @param [Unknown] lp_find_file_data Pointer to a WIN32_FIND_DATA structure that receives information about the found file or directory
 		# @param [Fixnum] dw_flags Controls the behavior of this function
-		# @param [Fixnum] dw_context Pointer to a variable that specifies the application-defined value that associates this search with any application data
+		# @param [Fixnum] dw_context Pointer to a variable specifying the application-defined value that associates this search with any application data
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
 		# up the API, you should review it and adjust as needed.  You may want
@@ -648,10 +649,10 @@ module Browser
 		# Retrieves the current directory for the specified FTP session.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384153(v=vs.85).aspx FtpGetCurrentDirectory
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_connect Handle to an FTP session
 		# @param [Fixnum] lpsz_current_directory String that receives the absolute path of the current directory
-		# @param [Fixnum] lpdw_current_directory Pointer to a variable that specifies the length of the buffer, in TCHARs
+		# @param [Fixnum] lpdw_current_directory Pointer to a variable specifying the length of the buffer, in TCHARs
 		#
 		def _ftp_get_current_directory(connect, current_directory, current_directory)
 
@@ -667,7 +668,7 @@ module Browser
 		# Retrieves a file from the FTP server and stores it under the specified file name, creating a new local file in the process.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384157(v=vs.85).aspx FtpGetFile
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_connect Handle to an FTP session
 		# @param [Fixnum] lpsz_remote_file String that contains the name of the file to be retrieved
 		# @param [Fixnum] lpsz_new_file String that contains the name of the file to be created on the local system
@@ -765,7 +766,7 @@ module Browser
 		# Stores a file on the FTP server.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384170(v=vs.85).aspx FtpPutFile
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_connect Handle to an FTP session
 		# @param [Fixnum] lpsz_local_file String that contains the name of the file to be sent from the local system
 		# @param [Fixnum] lpsz_new_remote_file String that contains the name of the file to be created on the remote system
@@ -802,7 +803,7 @@ module Browser
 		# Removes the specified directory on the FTP server.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384172(v=vs.85).aspx FtpRemoveDirectory
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_connect Handle to an FTP session
 		# @param [Fixnum] lpsz_directory String that contains the name of the directory to be removed
 		#
@@ -820,7 +821,7 @@ module Browser
 		# Renames a file stored on the FTP server.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384175(v=vs.85).aspx FtpRenameFile
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_connect Handle to an FTP session
 		# @param [Fixnum] lpsz_existing String that contains the name of the file to be renamed
 		# @param [Fixnum] lpsz_new String that contains the new name for the remote file
@@ -839,7 +840,7 @@ module Browser
 		# Changes to a different working directory on the FTP server.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384178(v=vs.85).aspx FtpSetCurrentDirectory
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_connect Handle to an FTP session
 		# @param [Fixnum] lpsz_directory String that contains the name of the directory to become the current working directory
 		#
@@ -874,7 +875,7 @@ module Browser
 		# Canonicalizes a URL, which includes converting unsafe characters and spaces into escape sequences.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384342(v=vs.85).aspx InternetCanonicalizeUrl
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] lpsz_url A pointer to the string that contains the URL to canonicalize
 		# @param [Fixnum] lpsz_buffer A pointer to the buffer that receives the resulting canonicalized URL
 		# @param [Fixnum] lpdw_buffer_length A pointer to a variable that contains the size, in characters,  of the lpszBuffer buffer
@@ -905,23 +906,10 @@ module Browser
 		end
 
 		#
-		# Clears all decisions that were made about cookies on a site by site basis.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384348(v=vs.85).aspx InternetClearAllPerSiteCookieDecisions
-
-		# @return [Boolean] Returns TRUE if all decisions were cleared and FALSE otherwise
-		#
-		def _internet_clear_all_per_site_cookie_decisions()
-			ret = run_dll_function(:wininet, :InternetClearAllPerSiteCookieDecisions)
-
-			# Additional code goes here
-
-		end
-
-		#
 		# Closes a single Internet handle.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384350(v=vs.85).aspx InternetCloseHandle
 
-		# @return [Boolean] Returns TRUE if the handle is successfully closed, or FALSE otherwise
+		# @return [Boolean] Returns true if the handle is successfully closed, or false otherwise
 		# @param [Fixnum] h_internet Handle to be closed
 		#
 		def _internet_close_handle(internet)
@@ -938,11 +926,11 @@ module Browser
 		# Combines a base and relative URL into a single URL. The resultant URL is canonicalized (see InternetCanonicalizeUrl).
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384355(v=vs.85).aspx InternetCombineUrl
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
-		# @param [Fixnum] lpsz_base_url String  that contains the base URL
-		# @param [Fixnum] lpsz_relative_url String  that contains the relative URL
-		# @param [Fixnum] lpsz_buffer Pointer to a buffer that receives the combined URL
-		# @param [Fixnum] lpdw_buffer_length Pointer to a variable that contains the size of the lpszBuffer buffer, in characters
+		# @return [Boolean] Returns true if successful, or false otherwise
+		# @param [String] lpsz_base_url String that contains the base URL
+		# @param [String] lpsz_relative_url String that contains the relative URL
+		# @param [String] lpsz_buffer Pointer to a buffer that receives the combined URL
+		# @param [Fixnum] lpdw_buffer_length size of the lpszBuffer buffer, in characters
 		# @param [Fixnum] dw_flags Controls the operation of the function
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
@@ -972,13 +960,16 @@ module Browser
 		end
 
 		#
-		# Checks for changes between secure and nonsecure URLs. Always inform the user when a change occurs in security between two URLs. Typically, an application should allow the user to acknowledge the change through interaction with a dialog box.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384358(v=vs.85).aspx InternetConfirmZoneCrossing
+		# Checks for changes between secure and nonsecure URLs. Always inform the user when a change
+    #   occurs in security between two URLs. Typically, an application should allow the user to
+    #   acknowledge the change through interaction with a dialog box.
+		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384358(v=vs.85).aspx
+    #   InternetConfirmZoneCrossing
 
 		# @return [Unknown] Returns one of the following values
 		# @param [Fixnum] h_wnd Handle to the parent window for any required dialog box
-		# @param [Fixnum] sz_url_prev String that specifies the URL that was viewed before the current request was made
-		# @param [Fixnum] sz_url_new String that specifies the new URL that the user has requested to view
+		# @param [String] sz_url_prev String specifying the URL viewed before the current request
+		# @param [String] sz_url_new String specifying the new URL requested to view
 		# @param [Unknown] b_post Not implemented
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
@@ -1011,9 +1002,9 @@ module Browser
 
 		# @return [Fixnum] Returns a valid handle to the session if the connection is successful, or NULL otherwise
 		# @param [Fixnum] h_internet Handle returned by a previous call to InternetOpen
-		# @param [Fixnum] lpsz_server_name String that specifies the host name of an Internet server
+		# @param [Fixnum] lpsz_server_name String specifying the host name of an Internet server
 		# @param [Unknown] n_server_port Transmission Control Protocol/Internet Protocol (TCP/IP) port on the server
-		# @param [Fixnum] lpsz_username String that specifies the name of the user to log on
+		# @param [Fixnum] lpsz_username String specifying the name of the user to log on
 		# @param [Fixnum] lpsz_password String that contains the password to use to log on
 		# @param [Fixnum] dw_service Type of service to access
 		# @param [Fixnum] dw_flags Options specific to the service used
@@ -1055,8 +1046,8 @@ module Browser
 		# Cracks a URL into its component parts.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384376(v=vs.85).aspx InternetCrackUrl
 
-		# @return [Boolean] Returns TRUE if the function succeeds, or FALSE otherwise
-		# @param [Fixnum] lpsz_url Pointer to a string that contains the canonical URL to be cracked
+		# @return [Boolean] Returns true if the function succeeds, or false otherwise
+		# @param [Fixnum] lpsz_url String that contains the canonical URL to be cracked
 		# @param [Fixnum] dw_url_length Size of the lpszUrl string, in TCHARs, or zero if lpszUrl is an ASCIIZ string
 		# @param [Fixnum] dw_flags Controls the operation
 		# @param [Fixnum] lp_url_components Pointer to a URL_COMPONENTS structure that receives the URL components
@@ -1089,11 +1080,11 @@ module Browser
 		# Creates a URL from its component parts.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384473(v=vs.85).aspx InternetCreateUrl
 
-		# @return [Boolean] Returns TRUE if the function succeeds, or FALSE otherwise
+		# @return [Boolean] Returns true if the function succeeds, or false otherwise
 		# @param [Fixnum] lp_url_components Pointer to a URL_COMPONENTS structure that contains the components from which to create the URL
 		# @param [Fixnum] dw_flags Controls the operation of this function
 		# @param [Fixnum] lpsz_url Pointer to a buffer that receives the URL
-		# @param [Fixnum] lpdw_url_length Pointer to a variable that specifies the size of the URLlpszUrl buffer, in TCHARs
+		# @param [Fixnum] lpdw_url_length Pointer to a variable specifying the size of the URLlpszUrl buffer, in TCHARs
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
 		# up the API, you should review it and adjust as needed.  You may want
@@ -1123,7 +1114,7 @@ module Browser
 		# Continues a file search started as a result of a previous call to FtpFindFirstFile.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384698(v=vs.85).aspx InternetFindNextFile
 
-		# @return [Boolean] Returns TRUE if the function succeeds, or FALSE otherwise
+		# @return [Boolean] Returns true if the function succeeds, or false otherwise
 		# @param [Fixnum] h_find Handle returned from either FtpFindFirstFile or  InternetOpenUrl (directories only)
 		# @param [Unknown] lpv_find_data Pointer to the buffer that receives information about the  file or directory
 		#
@@ -1141,7 +1132,7 @@ module Browser
 		# Retrieves the connected state of the local system.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384702(v=vs.85).aspx InternetGetConnectedState
 
-		# @return [Boolean] Returns TRUE if there is an active modem or a LAN Internet connection, or FALSE if there is no Internet connection, or if all possible Internet connections are not currently active
+		# @return [Boolean] Returns true if there is an active modem or a LAN Internet connection, or false if there is no Internet connection, or if all possible Internet connections are not currently active
 		# @param [Fixnum] lpdw_flags Pointer to a variable that receives  the connection description
 		# @param [Fixnum] dw_reserved This parameter is reserved and must be 0
 		#
@@ -1157,11 +1148,12 @@ module Browser
 
 		#
 		# Retrieves the connected state of the specified Internet connection.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384705(v=vs.85).aspx InternetGetConnectedStateEx
+		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384705(v=vs.85).aspx
+    #   InternetGetConnectedStateEx
 
-		# @return [Boolean] Returns TRUE if there is an Internet connection, or FALSE if there is no Internet connection, or if all possible Internet connections are not currently active
+		# @return [Boolean] Returns true if there is an available connection otherwise false
 		# @param [Fixnum] lpdw_flags Pointer to a variable that receives the connection description
-		# @param [Fixnum] lpsz_connection_name Pointer to a string value that receives the connection name
+		# @param [Fixnum] lpsz_connection_name String value that receives the connection name
 		# @param [Fixnum] dw_name_len Size of the lpszConnectionName string, in TCHARs
 		# @param [Fixnum] dw_reserved This parameter is reserved and must be NULL
 		#
@@ -1183,79 +1175,6 @@ module Browser
 
 			ret = run_dll_function(:wininet, :InternetGetConnectedStateEx, flags, connection_name, name_len,
 				opts[reserved],
-			)
-
-			# Additional code goes here
-
-		end
-
-    #
-    # JAS, functions from here up still need to be reviewed.
-    #
-		#
-
-		# Retrieves the cookie for the specified URL.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384710(v=vs.85).aspx
-    #  InternetGetCookie
-
-		# @return [Boolean] true on success, otherwise false
-		# @param [String] lpsz_url URL for which cookies are to be retrieved
-		# @param [String] lpsz_cookie_name Not implemented
-		# @param [String] lpsz_cookie_data receives the cookie data, can be nil
-		# @param [Fixnum] lpdw_size specifies the size of the lpszCookieData
-    #   parameter buffer, in TCHARs.  On success, this param receives the amount
-    #   of data copied to cookie_data.  If cookie_data is nil, this param
-    #   receives a value that specifies teh size of the buffer necessary to
-    #   copy all the cookie data, in bytes.
-		#
-		# @todo, this needs work
-		def _internet_get_cookie(url, cookie_data, size)
-      cookie_name = nil
-
-			# Any arg validation can go here
-
-			ret = run_dll_function(:wininet, :InternetGetCookie, url,
-                              cookie_name,
-                              cookie_data,
-				                      size
-			)
-
-			# Additional code goes here
-
-		end
-
-		#
-		# The InternetGetCookieEx function retrieves data stored in cookies associated with a specified URL. Unlike InternetGetCookie, InternetGetCookieEx can be used to  restrict data retrieved to a single cookie name or, by policy, associated with untrusted sites or third-party cookies.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384714(v=vs.85).aspx InternetGetCookieEx
-
-		# @return [Boolean] If the function succeeds, the function returns TRUE
-		# @param [Fixnum] lpsz_url A String that contains the URL with which the cookie to retrieve is associated
-		# @param [Fixnum] lpsz_cookie_name A String that contains the name of the cookie to retrieve
-		# @param [Fixnum] lpsz_cookie_data A pointer to a buffer to receive the cookie data
-		# @param [Fixnum] lpdw_size A pointer to a DWORD variable
-		# @param [Fixnum] dw_flags A flag that controls how the function retrieves cookie data
-		# @param [Fixnum] lp_reserved Reserved for future use
-		#
-		# @todo, review and revamp opts and params as needed
-		def _internet_get_cookie_ex(url, cookie_name, cookie_data, opts = {})
-			defaults = {  # defaults for args in opts hash
-				:size => size_default,
-				:flags => flags_default,
-				:reserved => reserved_default
-			}
-
-			# Merge in defaults. This approach allows caller to safely pass in a nil
-			opts = defaults.merge(opts)
-
-			# Any arg validation can go here
-
-			ret = run_dll_function(:wininet, :InternetGetCookieEx,
-                              url,
-                              cookie_name,
-                              cookie_data,
-                      				opts[size],
-                      				opts[flags],
-                      				opts[reserved],
 			)
 
 			# Additional code goes here
@@ -1366,7 +1285,7 @@ module Browser
     #   INTERNET_FLAG_NO_COOKIES,INTERNET_FLAG_NO_UI,INTERNET_FLAG_PASSIVE,
     #   INTERNET_FLAG_PRAGMA_NOCACHE,INTERNET_FLAG_RAW_DATA,INTERNET_FLAG_RELOAD,
     #   INTERNET_FLAG_RESYNCHRONIZE,INTERNET_FLAG_SECURE
-		# @param [Fixnum] dw_context A pointer to a variable that specifies the
+		# @param [Fixnum] dw_context A pointer to a variable specifying the
     #   application-defined value that is passed, along with the returned handle,
     #   to any callback functions
 		#
@@ -1406,7 +1325,7 @@ module Browser
 		# @return [Boolean] Returns True on success
 		# @param [Fixnum] h_file Handle returned by InternetOpenUrl,
     #   FtpOpenFile, GopherOpenFile, or HttpOpenRequest
-		# @param [Fixnum] lpdw_number_of_bytes_available Pointer to a variable to 
+		# @param [Fixnum] lpdw_number_of_bytes_available Pointer to a variable to
     #   receive the number of available bytes
 		# @param [Fixnum] dw_flags This parameter is reserved and must be 0
 		# @param [Fixnum] dw_context This parameter is reserved and must be 0
@@ -1441,7 +1360,7 @@ module Browser
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385101(v=vs.85).aspx
     #   InternetQueryOption
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_internet Handle on which to query information
 		# @param [Fixnum] dw_option Internet option to be queried
 		# @param [Unknown] lp_buffer Pointer to a buffer to receive option setting
@@ -1478,7 +1397,7 @@ module Browser
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385103(v=vs.85).aspx
     #   InternetReadFile
 
-		# @return [Boolean] Returns TRUE if successful otherwise FALSE
+		# @return [Boolean] Returns true if successful otherwise false
 		# @param [Fixnum] h_file Handle returned from a previous call to
     #   InternetOpenUrl, FtpOpenFile, or HttpOpenRequest
 		# @param [Unknown] lp_buffer Pointer to a buffer to receive the data
@@ -1515,7 +1434,7 @@ module Browser
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385105(v=vs.85).aspx
     #   InternetReadFileEx
 
-		# @return [Boolean] Returns TRUE if successful otherwise FALSE
+		# @return [Boolean] Returns true if successful otherwise false
 		# @param [Fixnum] h_file Handle returned by InternetOpenUrl/HttpOpenRequest
 		# @param [Unknown] lp_buffers_out Pointer to an INTERNET_BUFFERS structure
     #   to receive the data downloaded
@@ -1557,11 +1476,9 @@ module Browser
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385107(v=vs.85).aspx
     #   InternetSetCookie
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
-		# @param [Fixnum] lpsz_url String that
-    #   specifies the URL for which the cookie should be set
-		# @param [Fixnum] lpsz_cookie_name String that
-    #   specifies the name to be associated with the cookie data
+		# @return [Boolean] Returns true if successful, or false otherwise
+		# @param [String] lpsz_url String specifying the URL for which the cookie should be set
+		# @param [Fixnum] lpsz_cookie_name String specifying the name to be associated with the cookie data
 		# @param [Fixnum] lpsz_cookie_data ptr to the data to associate with the URL
 		#
 		def _internet_set_cookie(url, cookie_name, cookie_data)
@@ -1569,62 +1486,6 @@ module Browser
 			# Any arg validation can go here
 
 			ret = run_dll_function(:wininet, :InternetSetCookie, url, cookie_name, cookie_data)
-
-			# Additional code goes here
-
-		end
-
-		#
-		# The InternetSetCookieEx function creates a cookie with a specified name
-    #   that is associated with a specified URL. This function differs from the
-    #   InternetSetCookie function by being able to create third-party cookies.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385108(v=vs.85).aspx
-    #   InternetSetCookieEx
-
-		# @return [Unknown] Returns a member of the InternetCookieState enumeration
-    #   if successful otherwise false
-		# @param [Fixnum] lpsz_url String that contains
-    #   the URL for which the cookie should be set
-		# @param [Fixnum] lpsz_cookie_name String that
-    #   contains the name to associate with this cookie
-		# @param [Fixnum] lpsz_cookie_data String that
-    #   contains the data to be associated with the new cookie
-		# @param [Fixnum] dw_flags Flags that control how the function retrieves
-    #   cookie data:
-    #     INTERNET_COOKIE_EVALUATE_P3P - If this flag is set and the dwReserved
-    #     param is not NULL, then dwReserved is cast to an LPCTSTR that points
-    #     to a Platform-for-Privacy-Protection (P3P) header for the cookie
-    #     INTERNET_COOKIE_HTTPONLY - Enables the retrieval of cookies that are
-    #     marked as "HTTPOnly".  Do not use this flag if you expose a scriptable
-    #     interface due to security concerns, you can become an attack vector
-    #     for cross-site scripting attacks. Requires IE8+
-    #     INTERNET_COOKIE_THIRD_PARTY - The cookie being set is 3rd-party
-    #     INTERNET_FLAG_RESTRICTED_ZONE - Indicates that the cookie being set is
-    #       associated with an untrusted site.
-		# @param [Fixnum] dw_reserved NULL, or contains a pointer to a
-    #   Platform-for-Privacy-Protection header to be associated with the cookie
-		#
-		# There are quite a few arguments so an opts hash was added.  To clean
-		# up the API, you should review it and adjust as needed.  You may want
-		# to consider regrouping args for: clarity, so args that are usually
-		# left at default values, or are optional, or always a specific value,
-		# etc, are put in the opts hash.  Or, you may want to get rid of the
-		# opts hash entirely.
-		def _internet_set_cookie_ex(url, cookie_name, cookie_data, opts = {})
-			defaults = {  # defaults for args in opts hash
-				:flags => flags_default,
-				:reserved => reserved_default
-			}
-
-			# Merge in defaults. This approach allows caller to safely pass in a nil
-			opts = defaults.merge(opts)
-
-			# Any arg validation can go here
-
-			ret = run_dll_function(:wininet, :InternetSetCookieEx, url, cookie_name, cookie_data,
-				opts[flags],
-				opts[reserved],
-			)
 
 			# Additional code goes here
 
@@ -1679,7 +1540,7 @@ module Browser
 		# Sets an Internet option.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385114(v=vs.85).aspx InternetSetOption
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_internet Handle on which to set information
 		# @param [Fixnum] dw_option Internet option to be set
 		# @param [Fixnum] lp_buffer Pointer to a buffer that contains the option setting
@@ -1710,33 +1571,15 @@ module Browser
 		end
 
 		#
-		# Sets a decision on cookies for a given domain.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385118(v=vs.85).aspx InternetSetPerSiteCookieDecision
-
-		# @return [Boolean] Returns TRUE if the decision is set and FALSE otherwise
-		# @param [Fixnum] pch_host_name An LPCTSTR that points to a string containing a domain
-		# @param [Fixnum] dw_decision A value of type DWORD that contains one of the InternetCookieState enumeration values
-		#
-		def _internet_set_per_site_cookie_decision(host_name, decision)
-
-			# Any arg validation can go here
-
-			ret = run_dll_function(:wininet, :InternetSetPerSiteCookieDecision, host_name, decision)
-
-			# Additional code goes here
-
-		end
-
-		#
 		# Formats a date and time according to the HTTP version 1.0 specification.
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385123(v=vs.85).aspx
     #   InternetTimeFromSystemTime
 
-		# @return [Boolean] Returns TRUE if the function succeeds otherwise FALSE
+		# @return [Boolean] Returns true if the function succeeds otherwise false
 		# @param [Unknown] pst Pointer to a SYSTEMTIME structure that contains the
     #   date and time to format
 		# @param [Fixnum] dw_rfc RFC format used
-		# @param [Fixnum] lpsz_time Pointer to a string buffer that receives the
+		# @param [Fixnum] lpsz_time String buffer that receives the
     #   formatted date and time
 		# @param [Fixnum] cb_time Size of the lpszTime buffer, in bytes
 		#
@@ -1772,9 +1615,8 @@ module Browser
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385125(v=vs.85).aspx
     #   InternetTimeToSystemTime
 
-		# @return [Boolean] Returns TRUE if the string was converted otherwise FALSE
-		# @param [Fixnum] lpsz_time String that
-    #   specifies the date/time to be converted
+		# @return [Boolean] Returns true if the string was converted otherwise false
+		# @param [Fixnum] lpsz_time String specifying the date/time to be converted
 		# @param [Fixnum] pst Pointer to a SYSTEMTIME structure that receives the
     #   converted time
 		# @param [Fixnum] dw_reserved This parameter is reserved and must be 0
@@ -1797,7 +1639,7 @@ module Browser
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385126(v=vs.85).aspx
     #   InternetUnlockRequestFile
 
-		# @return [Boolean] Returns TRUE if successful, or FALSE otherwise
+		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Fixnum] h_lock_request_info Handle to a lock request that was
     #   returned by InternetLockRequestFile
 		#
@@ -1817,7 +1659,7 @@ module Browser
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385128(v=vs.85).aspx
     #   InternetWriteFile
 
-		# @return [Boolean] Returns TRUE if the function succeeds, or FALSE otherwise
+		# @return [Boolean] Returns true if the function succeeds, or false otherwise
 		# @param [Fixnum] h_file Handle returned from a previous call to FtpOpenFile
     #   or an HINTERNET handle sent by HttpSendRequestEx
 		# @param [Fixnum] lp_buffer Pointer to a buffer that contains the data to be
@@ -1845,95 +1687,9 @@ module Browser
 
 			ret = run_dll_function(:wininet, :InternetWriteFile,
                               file,
-                              buffer, 
+                              buffer,
                               number_of_bytes_to_write,
 				                      opts[number_of_bytes_written],
-			)
-
-			# Additional code goes here
-
-		end
-
-		#
-		# Retrieves the privacy settings for a given URLZONE and PrivacyType.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385336(v=vs.85).aspx
-    #   PrivacyGetZonePreferenceW
-
-		# @return [Unknown] Returns zero if successful
-		# @param [Fixnum] dw_zone A value of type DWORD that specifies the URLZONE
-    #   for which privacy settings are being retrieved
-		# @param [Fixnum] dw_type A value of type DWORD that specifies the 
-    #   PrivacyType for which privacy settings are being retrieved
-		# @param [Fixnum] pdw_template An LPDWORD that returns a pointer to a DWORD
-    #   containing which of the PrivacyTemplates is in use for this dwZone/dwType
-		# @param [Fixnum] psz_buffer An  LPWSTR that points to a buffer containing a LPCWSTR representing a string version of the pdwTemplate or a customized string if the pdwTemplate is set to PRIVACY_TEMPLATE_CUSTOM
-		# @param [Fixnum] pdw_buffer_length An LPDWORD that contains the buffer length in characters
-		#
-		# There are quite a few arguments so an opts hash was added.  To clean
-		# up the API, you should review it and adjust as needed.  You may want
-		# to consider regrouping args for: clarity, so args that are usually
-		# left at default values, or are optional, or always a specific value,
-		# etc, are put in the opts hash.  Or, you may want to get rid of the
-		# opts hash entirely.
-		def _privacy_get_zone_preference_w(zone, type, template, opts = {})
-			defaults = {  # defaults for args in opts hash
-				:psz_buffer => psz_buffer_default,
-				:buffer_length => buffer_length_default
-			}
-
-			# Merge in defaults. This approach allows caller to safely pass in a nil
-			opts = defaults.merge(opts)
-
-			# Any arg validation can go here
-
-			ret = run_dll_function(:wininet, :PrivacyGetZonePreferenceW,
-                              zone,
-                              type,
-                              template,
-				                      opts[psz_buffer],
-				                      opts[buffer_length],
-			)
-
-			# Additional code goes here
-
-		end
-
-		#
-		# Sets the privacy settings for a given URLZONE and PrivacyType.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385338(v=vs.85).aspx
-    #   PrivacySetZonePreferenceW
-
-		# @return [Unknown] Returns zero if successful
-		# @param [Fixnum] dw_zone Value of type DWORD that specifies the URLZONE for
-    #   which privacy settings are being set
-		# @param [Fixnum] dw_type Value of type DWORD that specifies the PrivacyType
-    #   for which privacy settings are being set
-		# @param [Fixnum] dw_template Value of type DWORD that specifies which of
-    #   the privacy templates is to be used to set the privacy settings
-		# @param [Fixnum] psz_preference If dwTemplate is set to PRIVACY_TEMPLATE_CUSTOM,
-    #   this parameter is the string representation of the custom preferences
-		#
-		# There are quite a few arguments so an opts hash was added.  To clean
-		# up the API, you should review it and adjust as needed.  You may want
-		# to consider regrouping args for: clarity, so args that are usually
-		# left at default values, or are optional, or always a specific value,
-		# etc, are put in the opts hash.  Or, you may want to get rid of the
-		# opts hash entirely.
-		def _privacy_set_zone_preference_w(zone, type, template, opts = {})
-			defaults = {  # defaults for args in opts hash
-				:preference => preference_default
-			}
-
-			# Merge in defaults. This approach allows caller to safely pass in a nil
-			opts = defaults.merge(opts)
-
-			# Any arg validation can go here
-
-			ret = run_dll_function(:wininet, :PrivacySetZonePreferenceW,
-                             zone,
-                             type,
-                             template,
-			                       opts[preference],
 			)
 
 			# Additional code goes here
@@ -1946,7 +1702,7 @@ module Browser
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385357(v=vs.85).aspx
     #   ResumeSuspendedDownload
 
-		# @return [Boolean] Returns TRUE if successful; otherwise  FALSE
+		# @return [Boolean] Returns true if successful; otherwise  false
 		# @param [Fixnum] h_request Handle of the request that is suspended by a
     #   user interface dialog box
 		# @param [Fixnum] dw_result_code The error result returned from
@@ -1956,7 +1712,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :ResumeSuspendedDownload, 
+			ret = run_dll_function(:wininet, :ResumeSuspendedDownload,
                              request,
                              result_code)
 
