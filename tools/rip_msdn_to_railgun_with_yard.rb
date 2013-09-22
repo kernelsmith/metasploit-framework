@@ -329,15 +329,15 @@ end
 
 def normalize_param_direction(cpp_code_dir)
 	# @todo: what about _in_out_?
-	case cpp_code_dir
+	res = case cpp_code_dir
 	when /_inout/i
-		res = 'inout'
+		'inout'
 	when /_in_/i
-		res = 'in'
+		'in'
 	when /_out_/i
-		res = 'out'
+		'out'
 	else
-		res = 'unk'
+		'unk'
 	end
 	return res
 end
