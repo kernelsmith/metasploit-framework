@@ -9,20 +9,37 @@ require 'open-uri'
 #
 url = nil
 source = nil
-additional = nil
+additional = 0
+output_type = nil
 if ARGV.length == 1
 	source = ARGV[0]
-elsif ARGV.length == 2
+elsif ARGV.length == 2 or ARGV.length == 3
 	source = ARGV[0]
-	additional = ARGV[1] =~ /^\s*all\s*$/i ? -1 : ARGV[1].to_i
+	tmp = ARGV.last.strip
+	if tmp =~ /^(c)|(r)|(railgun)|(rg)|(ruby)$/i
+		# then the last arg looks like an output type
+		output_type = ARGV.pop.strip.downcase
+		if ARGV.length == 2
+			# if we still have 2 args, the we must also have an additional amount
+			addl = ARGV.pop.strip
+			additional = addl =~ /^\s*all\s*$/i ? -1 : addl.to_i
+		end
+	else
+		# assume the last item is the additional amount
+		addl = ARGV.pop.strip
+		additional = addl =~ /^\s*all\s*$/i ? -1 : addl.to_i
+		# if we still have 2 args, then we must also have an output type
+		output_type = ARGV.pop.strip.downcase if ARGV.length == 2
+	end
 	# adjust additional to get desired result later
 	additional -= 1 if additional >= 1 and not additional == -1
 else
 	# "InternetOpen" => "http://msdn.microsoft.com/en-us/library/windows/desktop/aa385096%28v=vs.85%29.aspx"
-	puts "Usage: #{$0} source [num_additional|all]"
+	puts "Usage: #{$0} source [num_additional|all] [C|railgun|ruby|r]"
 	puts
 	puts "source should be a url or a local html file containing msdn documentation for the method to be parsed"
 	puts "optionally, provide the number of additional functions to parse (default's to 0) or 'all' for entire dll"
+	puts "and optionally indicate which output language(s).  r indicates both ruby and railgun."
 	exit 1
 end
 
@@ -35,9 +52,9 @@ class MsdnMethod
 	include Comparable
 
 	attr_reader :source, :description, :nokodoc, :dll_name, :yard_factory, :param_infos, :return_desc, :reqs
-	attr_reader :c_args, :c_ret_type, :c_name, :c_code # c_args are really railgun args ATM.
+	attr_reader :c_args, :c_ret_type, :c_name, :c_lines, :c_code # c_args are really railgun args ATM.
 	attr_reader :ruby_args, :ruby_ret_type, :ruby_name, :ruby_code, :ruby_yard_tags
-	attr_reader :railgun_args, :railgun_ret_type, :railgun_name, :railgun_code 
+	attr_reader :railgun_args, :railgun_ret_type, :railgun_name, :railgun_code
 
 	# various constants we'll need to reference
 	INDENT = "\t"
@@ -91,13 +108,6 @@ class MsdnMethod
 					'PBLOB'    => 'PBLOB',
 					'PSECURITY_DESCRIPTOR' => 'PBLOB', # if thing is *thing
 					'PSID'     => 'PBLOB',
-					'LPDWORD'  => 'PBLOB',
-					# String-buffers that are OUT-only use a Fixnum describing the buffer size (including the null)--railgun_manual.pdf
-					'LPTSTR'   => 'DWORD',
-					'LPCSTR'   => 'DWORD',
-					'LPCTSTR'  => 'DWORD',
-					'LPWSTR'   => 'DWORD',
-					'LPCWSTR'  => 'DWORD',
 					'FILETIME' => 'QWORD', # not sure if QWORD is actually supported or not
 						# typedef struct _FILETIME {
 						#   DWORD dwLowDateTime;
@@ -156,14 +166,38 @@ class MsdnMethod
 		accum
 	end
 
+	def self.prettify_arg_name(arg)
+		if not arg =~ /[A-Z]+/ # if no capital letters found
+			self.rubify_name(arg) # then send the entire name to be rubified
+		else
+			self.rubify_name(arg.split(/^[a-z]+/).last) # drop lead low case ltrs first
+		end
+	end
+
+	def self.rubify_name(cname)
+		tmp = cname.gsub(/::/, '/')
+		tmp = tmp.gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2')
+		tmp = tmp.gsub(/([a-z\d])([A-Z])/,'\1_\2')
+		# '*' from pointers are handled here
+		tmp.gsub('*','').tr("-", "_").downcase
+	end
+
 	def initialize(page)
 		#puts "Creating nokogiri doc for #{page}..."
 		# +page+ should be either a local file to read, or a url to scrape, or anything else Nokogiri::HTML(open()) can handle
 		# http://msdn.microsoft.com/en-us/library/windows/desktop/aa384247(v=vs.85).aspx
 		@nokodoc = Nokogiri::HTML(open(page))
-		puts "Done."
+		inform "Done."
 		@source = page
 		@yard_factory = YardTagFactory.new
+	end
+
+	def rubify_name(cname)
+		self.class.rubify_name(cname)
+	end
+
+	def prettify_arg_name(cname)
+		self.class.prettify_arg_name(cname)
 	end
 
 	def parse
@@ -173,8 +207,9 @@ class MsdnMethod
 		@c_code = get_code_from_nodeset(all_code_snippet_containers)
 		return nil if @c_code.nil? or @c_code.empty? # some urls just display "This function is not supported"
 		# @TODO:  we only support cpp parsing at the moment, maybe add C parsing some day
-		@c_name, @c_ret_type, @c_args = analyze_cpp_code(@c_code)
-		#puts "Got #{@c_name}, #{@c_ret_type}, #{@c_args.inspect}"
+		# we call these c_args below, but they've really already been converted to railgun-like args
+		@c_name, @c_ret_type, @c_args, @c_lines = analyze_cpp_code(@c_code)
+		#puts "Got #{@c_name}, #{@c_ret_type}, #{@c_args.inspect}", #{@c_lines}""
 		@railgun_name = @c_name # identical
 		#puts "Converting c method name to ruby method name"
 		@ruby_name = rubify_name(@c_name)
@@ -187,15 +222,11 @@ class MsdnMethod
 		@railgun_args = @c_args.map do |arg|
 			arg.map {|a| a.gsub('*','')}
 		end # remove any *'s
-		@railgun_code = format_railgun_code(@railgun_name, @railgun_ret_type, @railgun_args)
+		@railgun_code = format_railgun_code
 		@ruby_args = []
 		@c_args.each do |arg|
 			#puts "Converting this c_arg:#{arg} to a ruby_arg"
-			if not arg[1] =~ /[A-Z]+/ # if no capital letters found
-				@ruby_args << rubify_name(arg[1]) # then send the entire name to be rubified
-			else
-				@ruby_args << rubify_name(arg[1].split(/^[a-z]+/).last) # drop lead low case ltrs first
-			end
+			@ruby_args << prettify_arg_name(arg[1])
 		end
 		main_section = nokodoc.xpath(MAIN_SECTION_XPATH)
 		return unless main_section # we couldn't find any other info to look at
@@ -239,7 +270,7 @@ class MsdnMethod
 		all_function_urls = []
 		all_functions_ns.each do |f|
 			next_uri = f.xpath("a").first.attributes["href"].value
-			all_function_urls << {:name => f.text.strip, :url => next_uri =~ /msdn/ ? next_uri : "http://msdn.microsoft.com#{next_uri}"}
+			all_function_urls << (next_uri =~ /msdn/ ? next_uri : "http://msdn.microsoft.com#{next_uri}")
 		end
 		all_function_urls
 	end
@@ -282,14 +313,6 @@ private :run_dll_function
 
 	def cc(str)
 		MsdnMethod.commentify(str)
-	end
-
-	def rubify_name(cname)
-		tmp = cname.gsub(/::/, '/')
-		tmp = tmp.gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2')
-		tmp = tmp.gsub(/([a-z\d])([A-Z])/,'\1_\2')
-		# '*' from pointers are handled here
-		tmp.gsub('*','').tr("-", "_").downcase
 	end
 
 	def rubify_code(c_method_name, ruby_method_name, ruby_arguments, bool = false)
@@ -385,6 +408,9 @@ private :run_dll_function
 			elsif name =~ /^dw/
 				interim_type = "DWORD"
 			end
+		# Base Rule (in):  If it starts with lpsz, it's a string
+		elsif name =~ /^lpsz/
+			interim_type = "LPTSTR"
 		# Basic Rule (in):  If it starts w/"H", prolly a handle so DWORD
 		elsif cpp_type =~ /^H/ # ghetto, will have false pos
 			interim_type = "HANDLE"
@@ -399,6 +425,7 @@ private :run_dll_function
 		if rg_type.class == Hash
 			rg_type = unicode ? rg_type["W"] : rg_type["A"]
 		end
+		#puts "Returning rg_type:#{rg_type} for #{name}:#{cpp_type}"
 		rg_type
 	end
 
@@ -417,6 +444,13 @@ private :run_dll_function
 		# Basic Rule (out):  params are always PBLOB's if they are pointers indicated like *so
 		# ghetto, might have false pos, we'll see
 		elsif name =~ /^\*/
+			interim_type = "PBLOB"
+		# Basic Rule (out):  LP's are all PBLOB's unless they are string related, see next comment.
+		# String-buffers that are OUT-only use a Fixnum describing the buffer size
+		#   (including the null) -- railgun_manual.pdf
+		elsif cpp_type =~ /^LP.+STR$/ # covers 'LPTSTR','LPCSTR', 'LPCTSTR', 'LPWSTR', 'LPCWSTR'
+			interim_type = "DWORD"
+		elsif cpp_type =~ /^LP.+$/ # covers 'LPDWORD', LP_INTERNET_BUFFER etc
 			interim_type = "PBLOB"
 		# Basic Rule (out):  If none of above, rely on the hash
 		else
@@ -446,7 +480,7 @@ private :run_dll_function
 			# e.g. http://msdn.microsoft.com/en-us/library/windows/desktop/aa384688(v=vs.85).aspx
 			direction = normalize_param_direction(parts[0])
 			cpp_type = parts[1,2].join(" ")
-			name = parts[3].sub(/,$/,'')		
+			name = parts[3].sub(/,$/,'')
 		else
 			# we can probably trust the direction
 			direction = normalize_param_direction(parts[0])
@@ -474,20 +508,10 @@ private :run_dll_function
 
 	def analyze_cpp_code(cpp_code)
 		#puts "Analyzing this code: #{cpp_code}"
-
-		# BOOL InternetCheckConnection(
-		#   _In_  LPCTSTR lpszUrl,
-		#   _In_  DWORD dwFlags,
-		#   _In_  DWORD dwReserved
-		# );
-		####################
-		# ["PBLOB","lpsaAddress","in"],
-		# ["DWORD","dwAddressLength","in"],
-		# ["PBLOB","lpProtocolInfo","in"],
-		# ["PCHAR","lpszAddressString","inout"],
 		ret_type = "UNK"
 		func_name = "Unknown"
 		params = []
+		c_lines = []
 
 		cpp_code.lines do |line|
 			next if line =~ /^\s*$/ or line =~ /^\s*\);/ # blank or last line
@@ -503,15 +527,17 @@ private :run_dll_function
 			else
 				# this is a regular param line
 				params << get_param(line)
+				c_lines << line.sub(/,\s*$/,'')
 			end
 		end
-		return func_name, ret_type, params
+		return func_name, ret_type, params, c_lines
 	end
 
-	def format_railgun_code(rg_method_name, rg_ret_type, rg_parameters = [])
-		res = "#{INDENT}#{INDENT}dll.add_function(\'#{rg_method_name}\', \'#{rg_ret_type}\', [\n"
-		rg_parameters.each do |p|
-			res += "#{INDENT}#{INDENT}#{INDENT}[#{p.map {|x| "\'#{x}\'"}.join(", ")}],\n"
+	def format_railgun_code
+		res = "#{INDENT}#{INDENT}dll.add_function(\'#{railgun_name}\', \'#{railgun_ret_type}\', [\n"
+		railgun_args.each_with_index do |p, idx|
+			# beautify the code and add the c version to the end as comments, for ref
+			res += "#{INDENT}#{INDENT}#{INDENT}[#{p.map {|x| "\'#{x}\'"}.join(", ")}], # #{c_lines[idx]}\n"
 		end
 		res += "#{INDENT}#{INDENT}])\n"
 	end
@@ -626,14 +652,17 @@ end # MsdnMethod
 class YardTag
 	attr_accessor :tag, :description # @todo
 	attr_reader :arg_name, :arg_type
-	
+
 	def initialize(tag = "@param", arg_type = "String", arg_name, description)
 		tag = tag.to_s.strip.downcase
 		@tag = tag =~  /^@[a-z]{3,}$/ ? tag : "@#{tag}"
 		arg_type = arg_type.to_s.strip.capitalize
 		@arg_type = arg_type =~ /^\[[A-Z][a-z]{2,}\]$/ ? arg_type : "[#{arg_type}]"
 		@arg_name = arg_name
+		# some jargon that can be removed/shortened
 		@description = description.gsub(/^This parameter /, "Parameter ")
+		@description = @description.gsub(/A pointer to a null-terminated string that/,'')
+
 		#@name = arg_name # might not be needed at all, tbd
 	end
 	# Use this for an opts hash
@@ -713,25 +742,8 @@ class YardTagFactory
 		else
 			#barf?
 		end
-		name = rubify_name(name)
+		name = MsdnMethod.prettify_arg_name(name)
 		return [type, name]
-	end
-	# support c_code &&/|| args + ret_type?
-		# dll.add_function('InternetTimeToSystemTime', 'BOOL', [
-		# 	['PDWORD', 'lpszTime', 'in'],
-		# 	['UNK', '*pst', 'out'],
-		# 	['DWORD', 'dwReserved', 'in'],
-		# ])
-
-	# Turn a C-like name into a ruby-friendly name
-	def rubify_name(cname)
-		tmp = cname.gsub(/::/, '/') # replace :: with /
-		tmp = tmp.gsub('*', '') # replace * with nothing
-		if tmp =~ /[A-Z]/ # if there are any capital letters
-			tmp = tmp.gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2') # replace
-			tmp = tmp.gsub(/([a-z\d])([A-Z])/,'\1_\2') # replace
-		end
-		tmp.tr("-", "_").downcase # in case a "*" makes it this far
 	end
 
 	def garden(src) # (rg_code = @yard)
@@ -809,39 +821,32 @@ def inform(msg = nil)
 	msg.respond_to?(:to_s) ? puts("[*] #{msg.to_s}") : puts()
 end
 
-<<<<<<< HEAD
-def normalize_param_direction(cpp_code_dir)
-	# @todo: what about _in_out_?
-	res = case cpp_code_dir
-	when /_inout/i
-		'inout'
-	when /_in_/i
-		'in'
-	when /_out_/i
-		'out'
-	else
-		'unk'
-=======
 inform "Parsing #{source}"
 orig_msdn_method = MsdnMethod.new(source)
 orig_msdn_method.parse
 msdn_methods = [orig_msdn_method]
-if additional
+all_function_urls = []
+unless additional == 0
 	inform "Enumerating related functions..."
 	remaining_function_urls = orig_msdn_method.get_remaining_dll_function_urls
+	inform "Found #{remaining_function_urls.length.to_s} related urls."
+	all_function_urls = remaining_function_urls.push(source)
+	all_function_urls.sort!
 	#puts all_function_urls.inspect
+	# we add 1 t othe index to avoid parsing orig_msdn_method again, this precludes neg vals of add'l
+	start_index = all_function_urls.find_index(source) + 1
 	inform "Done.  Parsing enumerated functions..."
-	urls_to_parse = remaining_function_urls[0..additional]
+	urls_to_parse = all_function_urls[start_index..(start_index + additional)]
 	urls_to_parse.each do |h|
+		next if not h or h.empty?
 		#puts "Passing #{a.inspect} to parser"
-		msdn_method = MsdnMethod.new(h[:url])
-		inform "Parsing #{h[:url]}"
+		msdn_method = MsdnMethod.new(h)
+		inform "Parsing #{h}"
 		msdn_method.parse
 		msdn_methods << msdn_method
 	end
 end
-# sort was broken, but I think it's fixed now and NO
-#msdn_methods.sort!
+
 # prep to display w/code grouped together by type/lang
 c_disp, rg_disp, ruby_disp, yard_disp = [],[],[],[]
 msdn_methods.each do |m|
@@ -853,27 +858,35 @@ msdn_methods.each do |m|
 		total_ruby_disp += MsdnMethod.commentify(m.description)
 	else
 		total_ruby_disp += MsdnMethod.commentify "No description found"
->>>>>>> 275667edb25b176dd18dff8fa3eee88cc0aff65d
 	end
-	total_ruby_disp += MsdnMethod.commentify "@see #{m.source} #{m.c_name}\n" if m.c_name # don't think this would ever not be
+	total_ruby_disp += MsdnMethod.commentify "@see #{m.source} #{m.c_name}" if m.c_name # don't think this would ever not be
 	total_ruby_disp += "#{m.ruby_yard_tags_comment_block}\n#\n#{m.ruby_code}" if (m.ruby_yard_tags_comment_block and m.ruby_code)
 	ruby_disp << total_ruby_disp
 end
 # Final display
+puts
+inform
 inform "Results:"
 inform
-# inform "C/C++ Code:"
-# puts "---------------------------------------------------"
-# c_disp.each {|str_block| puts str_block;puts} # str_block is a block of code string
 puts
-inform "Railgun Code:"
-puts "---------------------------------------------------"
-rg_disp.each {|str_block| puts str_block;puts} 
-puts
-inform "Ruby Code:"
-puts "---------------------------------------------------"
-ruby_disp.each {|str_block| puts str_block;puts} 
-puts
-puts orig_msdn_method.get_dll_dry_helper_function # this could be msdn_methods.first.get_blah too
+if output_type == "c"
+	inform "C/C++ Code:"
+	inform "--------------------------------------------------------------------- [*]"
+	c_disp.each {|str_block| puts str_block;puts} # str_block is a block of code string
+	puts
+end
+if output_type == "rg" or output_type == "railgun" or output_type == "r"
+	inform "Railgun Code:"
+	inform "--------------------------------------------------------------------- [*]"
+	rg_disp.each {|str_block| puts str_block;puts}
+	puts
+end
+if output_type == "ruby" or output_type == "r"
+	inform "Ruby Code:"
+	inform "--------------------------------------------------------------------- [*]"
+	ruby_disp.each {|str_block| puts str_block;puts}
+	puts
+	puts orig_msdn_method.get_dll_dry_helper_function # this could be msdn_methods.first.get_blah too
+end
 puts
 inform "********** All parsing complete.  Parsed #{msdn_methods.length} functions."
