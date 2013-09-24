@@ -318,7 +318,7 @@ class Def_wininet
 
 		dll.add_function('HttpEndRequest', 'BOOL', [
 			['HANDLE', 'Request', 'in'],
-			['UNK', 'BuffersOut', 'out'],
+			['PBLOB', 'BuffersOut', 'out'],
 			['DWORD', 'Flags', 'in'],
 			['PDWORD', 'Context', 'in'] # _In_opt_ DWORD_PTR dwContext
     ])
