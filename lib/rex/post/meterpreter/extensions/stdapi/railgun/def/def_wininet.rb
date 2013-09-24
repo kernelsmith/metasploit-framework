@@ -388,7 +388,7 @@ class Def_wininet
 		dll.add_function('InternetCheckConnection', 'BOOL', [
 			['PCHAR', 'Url', 'in'],
 			['DWORD', 'Flags', 'in'], # 0 or FLAG_ICC_FORCE_CONNECTION
-			['DWORD', 'Reserved', 'in']
+			['DWORD', 'Reserved', 'in'] # must be 0
     ])
 
 		# dll.add_function('InternetClearAllPerSiteCookieDecisions', 'BOOL', [
