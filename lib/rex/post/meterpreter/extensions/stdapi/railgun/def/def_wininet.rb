@@ -15,6 +15,7 @@ class Def_wininet
 	#  Those commented out have not been checked for accuracy
 	# @todo fix variable names that have retained their prefixes (like , lp etc)
 
+	# @see InternetErrorCodes http://msdn.microsoft.com/en-us/library/windows/desktop/aa385465(v=vs.85).aspx
 	# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385132(v=vs.85).aspx
 	INTERNET_BUFFERS = [
   	[:Header, :LPCTSTR],
@@ -539,7 +540,7 @@ class Def_wininet
 			['HANDLE', 'LockReqHandle', 'out']
     ])
 
-		dll.add_function('InternetOpen', 'HANDLE', [
+		dll.add_function('InternetOpenA', 'HANDLE', [
 			['PCHAR', 'Agent', 'in'],
 			['DWORD', 'AccessType', 'in'],
 			['PCHAR', 'ProxyName', 'in'],
@@ -547,10 +548,27 @@ class Def_wininet
 			['DWORD', 'Flags', 'in']
     ])
 
-		dll.add_function('InternetOpenUrl', 'HANDLE', [
+ 		dll.add_function('InternetOpenW', 'HANDLE', [
+			['PWCHAR', 'Agent', 'in'],
+			['DWORD', 'AccessType', 'in'],
+			['PWCHAR', 'ProxyName', 'in'],
+			['PWCHAR', 'ProxyBypass', 'in'],
+			['DWORD', 'Flags', 'in']
+    ])
+
+		dll.add_function('InternetOpenUrlA', 'HANDLE', [
 			['HANDLE', 'Internet', 'in'],
 			['PCHAR', 'Url', 'in'],
 			['PCHAR', 'Headers', 'in'],
+			['DWORD', 'HeadersLength', 'in'],
+			['DWORD', 'Flags', 'in'],
+			['PDWORD', 'Context', 'in']
+    ])
+
+		dll.add_function('InternetOpenUrlW', 'HANDLE', [
+			['HANDLE', 'Internet', 'in'],
+			['PWCHAR', 'Url', 'in'],
+			['PWCHAR', 'Headers', 'in'],
 			['DWORD', 'HeadersLength', 'in'],
 			['DWORD', 'Flags', 'in'],
 			['PDWORD', 'Context', 'in']
