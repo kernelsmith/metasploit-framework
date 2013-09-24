@@ -325,7 +325,12 @@ module Browser
 			# Merge in defaults. This approach allows caller to safely pass in a nil
 			opts = defaults.merge(opts)
 
-			# Any arg validation can go here
+			# url must start with ftp:, http:, or https:
+			url.strip!
+			unless url =~ /^(ftp:\/\/|http:\/\/|https:\/\/)/i
+				# default to http if you're not going to specify
+				url = 'http://' + url
+			end
 
 			ret = run_dll_function(:wininet, :InternetOpenUrl, internet, url, headers,
 				opts[headers_length],
