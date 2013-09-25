@@ -193,7 +193,7 @@ class Def_wininet
 		# 	['PBLOB', 'FileSizeHigh', 'out']
   #   ])
 
-		# dll.add_function('FtpOpenFile', 'DWORD', [
+		# dll.add_function('FtpOpenFile', 'HANDLE', [
 		# 	['HANDLE', 'Connect', 'in'],
 		# 	['PDWORD', 'FileName', 'in'],
 		# 	['DWORD', 'Access', 'in'],
@@ -296,7 +296,7 @@ class Def_wininet
 		# 	['PBLOB', 'GopherType', 'out']
   #   ])
 
-		# dll.add_function('GopherOpenFile', 'DWORD', [
+		# dll.add_function('GopherOpenFile', 'HANDLE', [
 		# 	['HANDLE', 'Connect', 'in'],
 		# 	['PDWORD', 'Locator', 'in'],
 		# 	['PDWORD', 'View', 'in'],
@@ -310,54 +310,103 @@ class Def_wininet
 		#
 		##########################################################
 
-		dll.add_function('HttpAddRequestHeaders', 'BOOL', [
+		dll.add_function('HttpAddRequestHeadersA', 'BOOL', [
 			['HANDLE', 'Request', 'in'],
 			['PCHAR', 'Headers', 'in'],
 			['DWORD', 'HeadersLength', 'in'],
 			['DWORD', 'Modifiers', 'in']
     ])
 
-		dll.add_function('HttpEndRequest', 'BOOL', [
+		dll.add_function('HttpAddRequestHeadersW', 'BOOL', [
+			['HANDLE', 'Request', 'in'],
+			['PWCHAR', 'Headers', 'in'],
+			['DWORD', 'HeadersLength', 'in'],
+			['DWORD', 'Modifiers', 'in']
+    ])
+
+		dll.add_function('HttpEndRequestA', 'BOOL', [
 			['HANDLE', 'Request', 'in'],
 			['PBLOB', 'BuffersOut', 'out'],
 			['DWORD', 'Flags', 'in'],
-			['PDWORD', 'Context', 'in'] # _In_opt_ DWORD_PTR dwContext
-    ])
+			['PDWORD', 'Context', 'in']
+		])
 
-		dll.add_function('HttpOpenRequest', 'DWORD', [
+		dll.add_function('HttpEndRequestW', 'BOOL', [
+			['HANDLE', 'Request', 'in'],
+			['PBLOB', 'BuffersOut', 'out'],
+			['DWORD', 'Flags', 'in'],
+			['PDWORD', 'Context', 'in']
+		])
+
+		dll.add_function('HttpOpenRequestA', 'HANDLE', [
 			['HANDLE', 'Connect', 'in'],
 			['PCHAR', 'Verb', 'in'],
 			['PCHAR', 'ObjectName', 'in'],
 			['PCHAR', 'Version', 'in'],
 			['PCHAR', 'Referer', 'in'],
-			['PDWORD', 'AcceptTypes', 'in'], # LPCTSTR *lplpszAcceptTypes
+			['PBLOB', 'AcceptTypes', 'in'], # LPCTSTR *lplpszAcceptTypes
 			['DWORD', 'Flags', 'in'],
 			['PDWORD', 'Context', 'in'] # _In_  DWORD_PTR dwContext
     ])
 
-		dll.add_function('HttpQueryInfo', 'BOOL', [
-			['HANDLE', 'Request', 'in'],
-			['DWORD', 'InfoLevel', 'in'],
-			['PBLOB', 'Buffer', 'inout'], # like WSAIoctl in ws2_32.  Must not be null
-			['PDWORD', 'BufferLength', 'inout'], # like WSALookupServiceNextA in ws2_32
-			['PDWORD', 'Index', 'inout']
+		dll.add_function('HttpOpenRequestW', 'HANDLE', [
+			['HANDLE', 'Connect', 'in'],
+			['PWCHAR', 'Verb', 'in'],
+			['PWCHAR', 'ObjectName', 'in'],
+			['PWCHAR', 'Version', 'in'],
+			['PWCHAR', 'Referer', 'in'],
+			['PBLOB', 'AcceptTypes', 'in'], # LPCTSTR *lplpszAcceptTypes
+			['DWORD', 'Flags', 'in'],
+			['PDWORD', 'Context', 'in'] # _In_  DWORD_PTR dwContext
     ])
 
-		dll.add_function('HttpSendRequest', 'BOOL', [
+		dll.add_function('HttpQueryInfoA', 'BOOL', [
+			['HANDLE', 'Request', 'in'],
+			['DWORD', 'InfoLevel', 'in'],
+			['LPVOID', 'Buffer', 'inout'], # like WSAIoctl in ws2_32.  Must not be null
+			['PDWORD', 'BufferLength', 'inout'], # like WSALookupServiceNextA in ws2_32
+			['PDWORD', 'Index', 'inout']
+		])
+
+		dll.add_function('HttpQueryInfoW', 'BOOL', [
+			['HANDLE', 'Request', 'in'],
+			['DWORD', 'InfoLevel', 'in'],
+			['LPVOID', 'Buffer', 'inout'], # like WSAIoctl in ws2_32.  Must not be null
+			['PDWORD', 'BufferLength', 'inout'], # like WSALookupServiceNextA in ws2_32
+			['PDWORD', 'Index', 'inout']
+		])
+
+		dll.add_function('HttpSendRequestA', 'BOOL', [
 			['HANDLE', 'Request', 'in'],
 			['PCHAR', 'Headers', 'in'],
+			['DWORD', 'HeadersLength', 'in'], # in TCHARs, -1
+			['LPVOID', 'Optional', 'in'], # for add'l data like for a POST or PUT, nil
+			['DWORD', 'OptionalLength', 'in'] # in bytes, 0 if above is nil
+		])
+
+		dll.add_function('HttpSendRequestW', 'BOOL', [
+			['HANDLE', 'Request', 'in'],
+			['PWCHAR', 'Headers', 'in'],
 			['DWORD', 'HeadersLength', 'in'],
-			['PBLOB', 'Optional', 'in'],
+			['LPVOID', 'Optional', 'in'],
 			['DWORD', 'OptionalLength', 'in']
-    ])
+		])
 		# recommend you use HttpSendRequest, not the Ex version, to avoid complex data structs
-		dll.add_function('HttpSendRequestEx', 'BOOL', [
+		dll.add_function('HttpSendRequestExA', 'BOOL', [
 			['HANDLE', 'Request', 'in'],
 			['PBLOB', 'BuffersIn', 'in'],
 			['PBLOB', 'BuffersOut', 'out'],
 			['DWORD', 'Flags', 'in'],
 			['PDWORD', 'Context', 'in']
-    ])
+		])
+
+		dll.add_function('HttpSendRequestExW', 'BOOL', [
+			['HANDLE', 'Request', 'in'],
+			['PBLOB', 'BuffersIn', 'in'],
+			['PBLOB', 'BuffersOut', 'out'],
+			['DWORD', 'Flags', 'in'],
+			['PDWORD', 'Context', 'in']
+		])
 
 		##########################################################
 		#
@@ -366,7 +415,7 @@ class Def_wininet
 		##########################################################
 
 		# Returns ERROR_SUCCESS or a system error code
-		dll.add_function('InternetAttemptConnect', 'DWORD', [
+		dll.add_function('InternetAttemptConnect', 'HANDLE', [
 			['DWORD', 'Reserved', 'in'] # must be 0
     ])
 
@@ -414,12 +463,23 @@ class Def_wininet
 		# 	['UNK', 'Post', 'in']
   #   ])
 
-		dll.add_function('InternetConnect', 'HANDLE', [
+		dll.add_function('InternetConnectA', 'HANDLE', [
 			['HANDLE', 'Internet', 'in'],
 			['PCHAR', 'ServerName', 'in'],
 			['DWORD', 'ServerPort', 'in'], # INTERNET_PORT nServerPort
 			['PCHAR', 'Username', 'in'],
 			['PCHAR', 'Password', 'in'],
+			['DWORD', 'Service', 'in'],
+			['DWORD', 'Flags', 'in'],
+			['PDWORD', 'Context', 'in']
+    ])
+
+		dll.add_function('InternetConnectW', 'HANDLE', [
+			['HANDLE', 'Internet', 'in'],
+			['PWCHAR', 'ServerName', 'in'],
+			['DWORD', 'ServerPort', 'in'], # INTERNET_PORT nServerPort
+			['PWCHAR', 'Username', 'in'],
+			['PWCHAR', 'Password', 'in'],
 			['DWORD', 'Service', 'in'],
 			['DWORD', 'Flags', 'in'],
 			['PDWORD', 'Context', 'in']
