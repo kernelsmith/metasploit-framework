@@ -51,6 +51,7 @@ module Browser
 	# >> client.railgun.kernel32.ReadFile(fh,10,10,4,nil)
   # => {"GetLastError" => 0, "return" => true, "lpBuffer" => "blablablab", "lpNum...Read" => 10}
 
+
   # This is a great example
   #
   # Open the service manager with advapi32.dll!OpenSCManagerA on the
@@ -117,13 +118,28 @@ module Browser
 			err_code = results['GetLastError']
 			error_msg = custom_error_msg || "Error running #{dll_as_sym.to_s}.dll function.  #{function_name_as_sym.to_s} error code: #{err_code}\n"
 			error_msg += "This WinAPI error may mean:  #{lookup_error(err_code, /^ERROR_/)}"
-			# @TODO; see if we can add to this error regex, look at msdn for wininet fxns, might be ERROR_INTERNET_* etc
+			# @todo subclass ? RuntimeError so we can return err msg plus the stuff from railgun?
+			# @todo use railgun error lookups, errors will be ERROR_INTERNET and just ERROR_
 			raise RuntimeError.new(error_msg)
 		else
-			results["return"]
+			results # ["return"]
 		end
 	end
 	private :run_dll_function
+
+	def session_is_64bit?
+		client.platform =~ /64/
+	end
+
+	def session_is_unicode?
+		client.info
+	end
+
+	# turn a list of args into a good windows-in memory array, null terminated
+	def arrayify(*args)
+		# for now we return nil when args is empty, most win fxns don't want an empty string
+		args.empty? ? nil : args.join("\x00") + "\x00"
+	end
 
 	#
 	# Get default browser
@@ -184,44 +200,66 @@ module Browser
 		#                                                     +- InternetErrorDlg
 
 
-	  # Do Stuff.  If called with a block, yields the manager and closes it when the block
-	  # returns.
+	  # Do Stuff.  If called with a block, yields the http_request_handle for your pleasure and
+	  #   closes it, and all the associate "internet" handles when the block returns.
 	  #
-	  # @param url
-	  # @param headers
-	  # @param agent
-	  # @param opts [Hash]
-	  # @option opts [String] :host (nil) Whatever
-	  # @option opts [Fixnum] :access Whatever
-	  # @return [Fixnum] HINTERNET handle to URL as returned by InternetOpenUrl
-	  # @yield [hinternet] Gives the block a hinternet handle as returned by
-	  #   wininet.dll!InternetOpenUrl. When the block returns, the handle
-	  #   will be closed with {#internet_close_handle}.
+	  # @param [String] :url
+	  # @param [String] :server
+	  # @param [String] :verb
+	  # @param [String] :agent
+	  # @option [Array<String>, String] :headers
+	  # @return [Array<String><Fixnum>, nil] Array consisting of the String body of the
+	  #   http response, if any, and the Fixnum HTTP code (200, 404 etc), or nil otherwise
+	  # @yield [http_request_handle] Gives the block an http request handle as returned by
+	  #   wininet.dll!HttpOpenRequest. When the block returns, the handle will be closed with
+	  #   {#internet_close_handle}, along with the other associated internet handles
 	  # @raise [RuntimeError] if InternetOpenUrl returns a NULL handle
 	  #
-	  def send_simple_http_request(url, headers = [], agent = UA_IE9_BASIC, opts={})
-	  	agent ||= "agent"
-	    opt = opts[:opt] || "opt"
+	  def send_simple_http_request(url, server, verb = "GET", agent = nil, *headers)
+	  	agent ||= UA_IE9_BASIC
+	  	# we've only tested w/one header so far, need to see how to format
+	  	# multiple since it's supposed to be a Windows array, nil-terminated
+	  	# for now we concat w/nils and make sure one get's appended to the end
+	  	#win_hdrs = arrayify(headers) # @todo, I'm not sure they have to be arrayified as such
+	  	headers = headers.join('\r\n') + '\x00' # already null term'd, but screw it
+	  	# since HttpSendRequest says:  Pointer to a null-terminated string that contains the
+	  	# additional headers to be appended to the request. This parameter can be NULL if there
+	  	# are no additional headers to be appended.
 
-	    # SC_HANDLE WINAPI OpenSCManager(
-	    #   _In_opt_  LPCTSTR lpMachineName,
-	    #   _In_opt_  LPCTSTR lpDatabaseName,
-	    #   _In_      DWORD dwDesiredAccess
-	    # );
-	    manag = session.railgun.advapi32.OpenSCManagerA(machine_str,nil,access)
-	    if (manag["return"] == 0)
-	      raise RuntimeError.new("Unable to open service manager, GetLastError: #{manag["GetLastError"]}")
-	    end
-
+			internet_handle = _internet_open(agent)
+			session_handle = _internet_connect(internet_handle, server)
+			http_request_handle = _http_open_request(session_handle, obj, verb, "index.html", opts)
 	    if (block_given?)
 	      begin
-	        yield manag["return"]
+	        yield http_request_handle
 	      ensure
-	        close_sc_manager(manag["return"])
+	        _internet_close_handle(http_request_handle)
+	        _internet_close_handle(session_handle)
+	        _internet_close_handle(internet_handle)
 	      end
 	    else
-	      return manag["return"]
-	    end
+				succeeded = _http_send_request(http_request_handle, headers)
+				if succeeded
+					# check/read the response
+					# FYI, http_open_request_ex might actually be easier depending on how you read.
+					#
+					# After the request is sent, the status code and response headers from the HTTP
+					# server are read. These headers are maintained internally and are available to client
+					# applications through the HttpQueryInfo function or QueryInfo
+					#
+					# InternetQueryDataAvailable(http_request_handle)
+					# InternetReadFile(http_request_handle)
+					# _http_query_info(http_request_handle, query)
+					#   where query can be all sorts, incl: HTTP_QUERY_STATUS_CODE
+					#   HTTP_QUERY_RAW_HEADERS_CRLF,
+					#
+					# An application can use the same HTTP request handle in multiple calls to
+					# HttpSendRequest, but the application must read all data returned from the previous
+					# call before calling the function again.
+				else
+					return nil
+				end
+			end
 	  end
 
 		#
@@ -229,9 +267,12 @@ module Browser
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385096(v=vs.85).aspx
     #   InternetOpen
 
-		# @return [Fixnum] Returns a handle to be passed to subsequent WinINet methods
-		# @param [Fixnum] lpsz_agent String user agent string
-		# @param [Fixnum] dw_access_type Type of access required:
+		# @return [Fixnum, nil] Returns a handle to be passed to subsequent WinINet methods
+		# @param [String] :agent String user agent string
+	  # @param [Hash] :opts
+	  # @option opts [String, Fixnum] :access_type ("INTERNET_OPEN_TYPE_PRECONFIG") type of
+	  #   access required which can be the String name of, or the Fixnum value of, the
+	  #   following Windows constants:
     #   INTERNET_OPEN_TYPE_DIRECT - Resolves all host names locally.
     #   INTERNET_OPEN_TYPE_PRECONFIG - Get proxy or direct config from registry
     #   INTERNET_OPEN_TYPE_PRECONFIG_WITH_NO_AUTOPROXY - Retrieve proxy or
@@ -240,24 +281,24 @@ module Browser
     #   INTERNET_OPEN_TYPE_PROXY - Passes requests to the proxy unless a proxy
     #   bypass list is supplied and name to be resolved bypasses the proxy. In
     #   that case use INTERNET_OPEN_TYPE_DIRECT.
-		# @param [Fixnum] lpsz_proxy_name String which specifies the name of the
-    #   proxy server(s) to use when dwAccessType is INTERNET_OPEN_TYPE_PROXY,
-    #   otherwise this parameter is ignored and should be nil
-		# @param [Fixnum] lpsz_proxy_bypass String which specifies an optional list
+		# @option opts [String, nil] :proxy_name (nil) String which specifies the name of the
+    #   proxy server(s) to use when dwAccessType (+access_type+) is
+    #   INTERNET_OPEN_TYPE_PROXY, otherwise this parameter is ignored and should be nil
+		# @option opts [String, nil] :proxy_bypass (nil) String which specifies an optional list
     #   of host names or IP addresses, or both, that should not be routed
     #   through the proxy when dwAccessType is set to INTERNET_OPEN_TYPE_PROXY.
-    #   The list can contain wildcards but do NOT use an empty string
-    #   INTERNET_OPEN_TYPE_PROXY.  See ref above for more info, also note that
-    #   this param is ignored and should be nil if dwAccessType is not set to
-    #   INTERNET_OPEN_TYPE_PROXY
-		# @param [Fixnum] dw_flags Options is any combo of the following:
+    #   The list can contain wildcards but do NOT use an empty string.  This
+    #   param is ignored and should be nil if dwAccessType is not set to
+    #   INTERNET_OPEN_TYPE_PROXY.  See ref above for more info.
+		# @option opts [String, Fixnum] :flags ('INTERNET_FLAG_ASYNC | INTERNET_FLAG_FROM_CACHE')
+		#   any combo of the following:
     #   INTERNET_FLAG_ASYNC - Makes only asynchronous requests on handles
     #   descendant from the handle returned from this function.
     #   INTERNET_FLAG_FROM_CACHE - Does not make network requests. All entities
     #   are returned from the cache. If the requested item is not in the cache,
     #   an error (such as ERROR_FILE_NOT_FOUND) is returned.
     #   INTERNET_FLAG_OFFLINE - Identical to INTERNET_FLAG_FROM_CACHE
-		#
+
 		def _internet_open(agent, opts = {})
 			defaults = {  # defaults for args in opts hash
         :access_type  => "INTERNET_OPEN_TYPE_PRECONFIG",
@@ -270,17 +311,175 @@ module Browser
 			opts = defaults.merge(opts)
 
 			# Any arg validation can go here
-
-			ret = run_dll_function(:wininet, :InternetOpen, agent,
+			# @todo determine how/when to send W version of this function
+			ret = run_dll_function(:wininet, :InternetOpenA, agent,
                               opts[access_type],
                               opts[proxy_name],
                       				opts[proxy_bypass],
                       				opts[flags]
 			)
-
-			# Additional code goes here
-
+			if ret
+				ret["return"]
+			else
+				false
+			end
 		end
+
+		#
+		# Opens an File Transfer Protocol (FTP) or HTTP session for a given site.
+		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384363(v=vs.85).aspx
+		#   InternetConnect
+
+		# @return [Fixnum, nil] Returns a valid handle to the session or NULL otherwise
+		# @param [Fixnum] :internet Handle returned by a previous call to InternetOpen
+		# @param [String] :server String specifying the host name or IP of server
+		# @param [String, Fixnum] :port Flag specifying port to use, passed as a Windows
+		#   constant (the value or the String representation), not an arbitrary port number
+
+	  # @param [Hash] :opts
+	  # @option opts [String, nil] :username (nil) String specifying the name of the user to log on
+		# @option opts [String, nil] :password (nil) String that contains the password to use to log on
+		# @option opts [String, Fixnum] :service ('INTERNET_SERVICE_HTTP') Type of service to
+		#   access (Windows constant as a Fixnum value or String representing the constant)
+		# @option opts [Fixnum] :flags (0) Options specific to the service used
+		# @option opts [Fixnum] :context (4) application-defined value used to identify app context
+		#
+		def _internet_connect(internet, server, port = 'INTERNET_DEFAULT_HTTP_PORT', opts = {})
+			# NOTE:  see msdn for port values, you can't just pass 80 or 8080 etc
+			defaults = {  # defaults for args in opts hash
+				:username => nil, # generally only useful w/FTP
+				:password => nil, # generally only useful w/FTP
+				:service => 'INTERNET_SERVICE_HTTP',
+				:flags => 0, # should always be 0 unless FTP passive mode desired
+				:context => 4 # should always be 4 for 32bit systems
+			}
+			# @todo determine arch of meterp and send 8 for context if required
+			# @todo determine how/when to send W version of this function, all A/W fxns really
+
+			# Merge in defaults. This approach allows caller to safely pass in a nil
+			opts = defaults.merge(opts)
+
+			# remove any prepended protocol (like http://)
+			# @todo should normalize '/' and '\' if any
+			server = server.strip.split(/^[a-z]{3,}:\/\//i).last
+
+			ret = run_dll_function(:wininet, :InternetConnectA, internet, server, port,
+				opts[username],
+				opts[password],
+				opts[service],
+				opts[flags],
+				opts[context],
+			)
+			if ret
+				ret["return"]
+			else
+				false
+			end
+		end
+
+		#
+		# Creates an HTTP request handle.
+		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384233(v=vs.85).aspx
+		#   HttpOpenRequest
+		# @return [Fixnum] Returns an HTTP request handle if successful otherwise nil
+		# @param [Fixnum] :connect handle to an internet session returned by InternetConnect
+		# @param [String] :object_name Name of the target object to be retrieved, generally a file
+		#   name, an executable module, or search specifier.
+		# @param [String] :verb The HTTP verb to use in the request.  If anything other than
+		#   "GET" or "POST" is specified, HttpOpenRequest automatically sets
+		#   INTERNET_FLAG_NO_CACHE_WRITE and INTERNET_FLAG_RELOAD for the request.
+		# @param [Hash] :opts
+		# @options opts [String,nil] :version (nil) HTTP version to use in request. IE will override
+		# @options opts [String,nil] :referer (nil) URL from which the request was made
+		# @options opts [Array<String>, String] :accept_types ("text/*") Indicates media types accepted
+		# @options opts [Fixnum] :flags Options controlling the request, see msdn url
+		# @options opts [Fixnum] :context (0) application-defined & -specific context
+		# @raise [RuntimeError] if Windows returns an error
+		#
+		def _http_open_request(connect, object_name, verb = "GET", opts = {})
+			flags_default = "INTERNET_FLAG_HYPERLINK | INTERNET_FLAG_IGNORE_CERT_CN_INVALID"
+			flags_default << " | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID"
+			flags_default << " | INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTPS"
+			flags_default << " | INTERNET_FLAG_NO_CACHE_WRITE"
+			flags_default << " | INTERNET_FLAG_NO_COOKIES"
+			flags_default << " | INTERNET_FLAG_NO_UI"
+			flags_default << " | INTERNET_FLAG_PRAGMA_NOCACHE"
+			flags_default << " | INTERNET_FLAG_RELOAD"
+			defaults = {  # defaults for args in opts hash
+				:version => nil, # IE will override the value anyways
+				:referer => nil,
+				# by default we just accept nearly anything
+				# but we haven't tested the array thing yet, so we're just gonna do text
+				:accept_types => "text/*"
+				# we'll need to figure this out tho, as we need application/json etc
+				#:accept_types => ["application/*", "text/*", "image/*", "audio/*", "video/*"],
+				:flags => flags_default,
+				:context => 0
+			}
+
+			# Merge in defaults. This approach allows caller to safely pass in a nil
+			opts = defaults.merge(opts)
+			# convert array to obedient windows array flattened to a string
+			opts[:accept_types] = arrayify(opts[:accept_types])
+
+			ret = run_dll_function(:wininet, :HttpOpenRequest, connect, verb, object_name,
+				opts[version],
+				opts[referer],
+				opts[lplpsz_accept_types],
+				opts[flags],
+				opts[context]
+			)
+
+			if ret
+				ret["return"]
+			else
+				false
+			end
+		end
+
+		#
+		# Sends the specified request to the HTTP server, allowing callers to send extra data beyond
+		#   what is normally passed to HttpSendRequestEx.
+		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384247(v=vs.85).aspx
+		#   HttpSendRequest
+
+		# @return [Boolean] Returns true if successful, or false otherwise
+		# @param [Handle] :request Handle returned by HttpOpenRequest
+		# @param [String, nil] :headers String that containing additional headers to be added,
+		#   CRLF separated
+		# @param [Fixnum, -1] :headers_length Size, in TCHARs, of the additional headers.  -1
+		#   causes the length to be calculated if :headers is not nil
+		# @param [Hash] :opts
+		# @options opts [String, nil] :optional (nil) String buffer containing any optional
+		#   data to be sent immediately after the request headers, useful for PUT/POST etc
+		# @options opts [Fixnum, 0] :optional_length Size of the optional data, in bytes
+		#
+		def _http_send_request(request, headers, headers_length = -1, opts = {})
+			defaults = {  # defaults for args in opts hash
+				:optional => nil,
+				:optional_length => 0
+			}
+
+			# Merge in defaults. This approach allows caller to safely pass in a nil
+			opts = defaults.merge(opts)
+
+			# calculate length in TCHARs if needed here.  .length * 2 + 1 right?
+
+			ret = run_dll_function(:wininet, :HttpSendRequest, request, headers, headers_length,
+				opts[optional],
+				opts[optional_length],
+			)
+
+			if ret
+				ret["return"]
+			else
+				false
+			end
+		end
+
+
+
+
 
 		#
 		# Opens a resource specified by a complete FTP or HTTP URL.
@@ -359,7 +558,10 @@ module Browser
 		#
 		def _http_add_request_headers(request, headers, modifiers = nil, headers_length = nil)
 			modifiers ||= "HTTP_ADDREQ_FLAG_ADD" # add header if not already exist (don't raise err)
-			headers_length ||= headers.length # @todo, do anything special for TCHARs?
+			# headers_length can -1L (not sure what that means) and headers are assumed to be
+			#  0-terminated (asciiz) and the length will be computed.
+			#  @todo, need to test a -1 fixnum, "-1L" and computing it myself
+			headers_length ||= (headers.length * 2 + 1) # in TCHARs, so *2 +1 for ascii?ß
 
 			# Any arg validation can go here
 
@@ -402,63 +604,6 @@ module Browser
 		end
 
 		#
-		# Creates an HTTP request handle.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384233(v=vs.85).aspx
-		#   HttpOpenRequest
-		# @return [Handle] Returns an HTTP request handle if successful otherwise nil
-		# @param [Handle] connect handle to an HTTP session returned by InternetConnect
-		# @param [String] verb Contains the HTTP verb to use in the request.  If anything other than
-		#   "GET" or "POST" is specified, HttpOpenRequest automatically sets
-		#   INTERNET_FLAG_NO_CACHE_WRITE and INTERNET_FLAG_RELOAD for the request.
-		# @param [String] object_name Name of the target object to be retrieved, generally a file
-		#   name, an executable module, or search specifier.
-		# @param [String] version The HTTP version to use in the request.  IE will override
-		# @param [String] referer Specifies the URL of the document from which
-		#   the URL in the request (+object_name+) was obtained
-		# @param [String] accept_types Indicates media types accepted by the client @todo Array
-		# @param [Fixnum] flags Options controlling the request, see msdn url
-		# @param [Fixnum] context A pointer to a variable that contains the application-defined value
-		#   that associates this operation with any application data @todo
-		# @raise [RuntimeError] if Windows returns an error
-		#
-		def _http_open_request(connect, object_name, verb = "GET", opts = {})
-			flags_default = "INTERNET_FLAG_HYPERLINK | INTERNET_FLAG_IGNORE_CERT_CN_INVALID"
-			flags_default << " | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID"
-			flags_default << " | INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTPS"
-			flags_default << " | INTERNET_FLAG_NO_CACHE_WRITE"
-			flags_default << " | INTERNET_FLAG_NO_COOKIES"
-			flags_default << " | INTERNET_FLAG_NO_UI"
-			flags_default << " | INTERNET_FLAG_PRAGMA_NOCACHE"
-			flags_default << " | INTERNET_FLAG_RELOAD"
-			defaults = {  # defaults for args in opts hash
-				:version => nil, # IE will override the value anyways
-				:referer => nil,
-				# by default we just accept nearly anything
-				:accept_types => ["application/*", "text/*", "image/*", "audio/*", "video/*"],
-				:flags => flags_default,
-				:context => 0
-			}
-			# array must have a null terminator, we can't detect one easily, so we add it no matter what
-			defaults[:accept_types].push(nil)
-
-			# Merge in defaults. This approach allows caller to safely pass in a nil
-			opts = defaults.merge(opts)
-
-			# Any more arg validation can go here
-
-			ret = run_dll_function(:wininet, :HttpOpenRequest, connect, verb, object_name,
-				opts[version],
-				opts[referer],
-				opts[lplpsz_accept_types],
-				opts[flags],
-				opts[context]
-			)
-
-			# Additional code goes here
-
-		end
-
-		#
 		# Retrieves header information associated with an HTTP request.  Header info can be
 		#   strings (default), SYSTEMTIME (for dates), DWORD (for STATUS_CODE, CONTENT_LENGTH,
 		#   and so on, if HTTP_QUERY_FLAG_NUMBER has been used).  To retrieve data as a type other
@@ -487,43 +632,6 @@ module Browser
 
 			ret = run_dll_function(:wininet, :HttpQueryInfo, request, info_level, buffer,
 				buffer_length, index
-			)
-
-			# Additional code goes here
-
-		end
-
-		#
-		# Sends the specified request to the HTTP server, allowing callers to send extra data beyond what is normally passed to HttpSendRequestEx.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384247(v=vs.85).aspx HttpSendRequest
-
-		# @return [Boolean] Returns true if successful, or false otherwise
-		# @param [Handle] h_request Handle returned by HttpOpenRequest
-		# @param [Fixnum] lpsz_headers String that contains the additional headers to be appended to the request
-		# @param [Fixnum] dw_headers_length Size of the additional headers, in TCHARs
-		# @param [Fixnum] lp_optional Pointer to a buffer containing any optional data to be sent immediately after the request headers
-		# @param [Fixnum] dw_optional_length Size of the optional data, in bytes
-		#
-		# There are quite a few arguments so an opts hash was added.  To clean
-		# up the API, you should review it and adjust as needed.  You may want
-		# to consider regrouping args for: clarity, so args that are usually
-		# left at default values, or are optional, or always a specific value,
-		# etc, are put in the opts hash.  Or, you may want to get rid of the
-		# opts hash entirely.
-		def _http_send_request(request, headers, headers_length, opts = {})
-			defaults = {  # defaults for args in opts hash
-				:optional => optional_default,
-				:optional_length => optional_length_default
-			}
-
-			# Merge in defaults. This approach allows caller to safely pass in a nil
-			opts = defaults.merge(opts)
-
-			# Any arg validation can go here
-
-			ret = run_dll_function(:wininet, :HttpSendRequest, request, headers, headers_length,
-				opts[optional],
-				opts[optional_length],
 			)
 
 			# Additional code goes here
@@ -599,52 +707,6 @@ module Browser
 			# Any arg validation can go here
 
 			ret = run_dll_function(:wininet, :InternetCloseHandle, internet)
-
-			# Additional code goes here
-
-		end
-
-		#
-		# Opens an File Transfer Protocol (FTP) or HTTP session for a given site.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384363(v=vs.85).aspx InternetConnect
-
-		# @return [Fixnum] Returns a valid handle to the session if the connection is successful, or NULL otherwise
-		# @param [Handle] h_internet Handle returned by a previous call to InternetOpen
-		# @param [Fixnum] lpsz_server_name String specifying the host name of an Internet server
-		# @param [Unknown] n_server_port Transmission Control Protocol/Internet Protocol (TCP/IP) port on the server
-		# @param [Fixnum] lpsz_username String specifying the name of the user to log on
-		# @param [Fixnum] lpsz_password String that contains the password to use to log on
-		# @param [Fixnum] dw_service Type of service to access
-		# @param [Fixnum] dw_flags Options specific to the service used
-		# @param [Fixnum] dw_context Pointer to a variable that contains an application-defined value that is used to identify the application context for the returned handle in callbacks
-		#
-		# There are quite a few arguments so an opts hash was added.  To clean
-		# up the API, you should review it and adjust as needed.  You may want
-		# to consider regrouping args for: clarity, so args that are usually
-		# left at default values, or are optional, or always a specific value,
-		# etc, are put in the opts hash.  Or, you may want to get rid of the
-		# opts hash entirely.
-		def _internet_connect(internet, server_name, server_port, opts = {})
-			defaults = {  # defaults for args in opts hash
-				:username => username_default,
-				:password => password_default,
-				:service => service_default,
-				:flags => flags_default,
-				:context => context_default
-			}
-
-			# Merge in defaults. This approach allows caller to safely pass in a nil
-			opts = defaults.merge(opts)
-
-			# Any arg validation can go here
-
-			ret = run_dll_function(:wininet, :InternetConnect, internet, server_name, server_port,
-				opts[username],
-				opts[password],
-				opts[service],
-				opts[flags],
-				opts[context],
-			)
 
 			# Additional code goes here
 
