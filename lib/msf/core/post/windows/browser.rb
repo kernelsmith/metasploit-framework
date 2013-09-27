@@ -215,7 +215,7 @@ module Browser
 	  #   {#internet_close_handle}, along with the other associated internet handles
 	  # @raise [RuntimeError] if InternetOpenUrl returns a NULL handle
 	  #
-	  def send_simple_http_request(url, server, verb = "GET", agent = nil, *headers)
+	  def send_simple_http_request(server, resource, verb = "GET", agent = nil, *headers)
 	  	agent ||= UA_IE9_BASIC
 	  	# we've only tested w/one header so far, need to see how to format
 	  	# multiple since it's supposed to be a Windows array, nil-terminated
@@ -410,7 +410,7 @@ module Browser
 				:referer => nil,
 				# by default we just accept nearly anything
 				# but we haven't tested the array thing yet, so we're just gonna do text
-				:accept_types => "text/*"
+				:accept_types => "text/*",
 				# we'll need to figure this out tho, as we need application/json etc
 				#:accept_types => ["application/*", "text/*", "image/*", "audio/*", "video/*"],
 				:flags => flags_default,
