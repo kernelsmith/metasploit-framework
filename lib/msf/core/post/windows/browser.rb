@@ -51,72 +51,45 @@ module Browser
 	# >> client.railgun.kernel32.ReadFile(fh,10,10,4,nil)
   # => {"GetLastError" => 0, "return" => true, "lpBuffer" => "blablablab", "lpNum...Read" => 10}
 
-
-  # This is a great example
-  #
-  # Open the service manager with advapi32.dll!OpenSCManagerA on the
-  # given host or the local machine if :host option is nil. If called
-  # with a block, yields the manager and closes it when the block
-  # returns.
-  #
-  # @param opts [Hash]
-  # @option opts [String] :host (nil) The host on which to open the
-  #   service manager. May be a hostname or IP address.
-  # @option opts [Fixnum] :access (0xF003F) Bitwise-or of the
-  #   SC_MANAGER_* constants (see
-  #   {http://msdn.microsoft.com/en-us/library/windows/desktop/ms685981(v=vs.85).aspx})
-  #
-  # @return [Fixnum] Opaque Windows handle SC_HANDLE as returned by
-  #   OpenSCManagerA()
-  # @yield [manager] Gives the block a manager handle as returned by
-  #   advapi32.dll!OpenSCManagerA. When the block returns, the handle
-  #   will be closed with {#close_sc_manager}.
-  # @raise [RuntimeError] if OpenSCManagerA returns a NULL handle
-  #
-  def open_sc_manager(opts={})
-    host = opts[:host] || nil
-    access = opts[:access] || 0xF003F
-    machine_str = host ? "\\\\#{host}" : nil
-
-    # SC_HANDLE WINAPI OpenSCManager(
-    #   _In_opt_  LPCTSTR lpMachineName,
-    #   _In_opt_  LPCTSTR lpDatabaseName,
-    #   _In_      DWORD dwDesiredAccess
-    # );
-    manag = session.railgun.advapi32.OpenSCManagerA(machine_str,nil,access)
-    if (manag["return"] == 0)
-      raise RuntimeError.new("Unable to open service manager, GetLastError: #{manag["GetLastError"]}")
-    end
-
-    if (block_given?)
-      begin
-        yield manag["return"]
-      ensure
-        close_sc_manager(manag["return"])
-      end
-    else
-      return manag["return"]
-    end
-  end
-
 	#
 	# This private method helps DRY out our code and provides basic error handling and messaging.
 	# It only returns the "return" part of the hash returned by railgun, unless there is an error
-	# @example run_dll_function(:wininet, :InternetOpen, nil, "my ua string", "INTERNET_OPEN_TYPE_DIRECT", nil, nil, 0)
+	# @example session.railgun.wininet.send(:InternetOpen, nil, "my ua string", "INTERNET_OPEN_TYPE_DIRECT", nil, nil, 0)
 	# @param [Symbol] DLL name as a Symbol
 	# @param [Symbol] C Function name as a Symbol
 	# @param [String, nil] Custom error message to use instead of dyanmically generated message
 	# @todo finish this yard doc
 	# @param Variable number of additional args as needed
 	# @return varies depending on the C-function that is called
-	def run_dll_function(dll_as_sym, function_name_as_sym, custom_error_msg = nil, *function_args)
-		args = [function_name_as_sym]
-		args += function_args
-		results = session.railgun.send(dll_as_sym).send(args * ",") # use this array format to avoid extra comma when args initially empty
+	# def run_dll_function(args)
+	# 	dll_as_sym = args.delete_at(0)
+	# 	#args += function_args.map {|arg| arg ? "\'#{arg}\'" : nil}
+	# 	puts "Session is #{session.to_s}"
+	# 	puts "Calling:  session.railgun.send(#{dll_as_sym.to_s}).send(#{args.join(',')})"
+	# 	#client.railgun.send(:wininet).send(:InternetGetConnectedState, 4, 0)
+	# 	results = session.railgun.send(dll_as_sym).send(args.join(",")) # use this array format to avoid extra comma when args initially empty
+	# 	err = results["GetLastError"]
+	# 	if not err == 0
+	# 		err_code = results['GetLastError']
+	# 		error_msg = "Error running #{dll_as_sym.to_s}.dll function.  #{function_name_as_sym.to_s} error code: #{err_code}\n"
+	# 		error_msg += "This WinAPI error may mean:  #{lookup_error(err_code, /^ERROR_/)}"
+	# 		# @todo subclass ? RuntimeError so we can return err msg plus the stuff from railgun?
+	# 		# @todo use railgun error lookups, errors will be ERROR_INTERNET and just ERROR_
+	# 		raise RuntimeError.new(error_msg)
+	# 	else
+	# 		results # ["return"]
+	# 	end
+	# end
+
+	def pointer
+		session.railgun.util.pointer_size
+	end
+
+	def handle_railgun_hash(results, function, dll = "wininet")
 		err = results["GetLastError"]
 		if not err == 0
 			err_code = results['GetLastError']
-			error_msg = custom_error_msg || "Error running #{dll_as_sym.to_s}.dll function.  #{function_name_as_sym.to_s} error code: #{err_code}\n"
+			error_msg = "Error running #{dll}.dll function.  #{function} error code: #{err_code}\n"
 			error_msg += "This WinAPI error may mean:  #{lookup_error(err_code, /^ERROR_/)}"
 			# @todo subclass ? RuntimeError so we can return err msg plus the stuff from railgun?
 			# @todo use railgun error lookups, errors will be ERROR_INTERNET and just ERROR_
@@ -125,39 +98,24 @@ module Browser
 			results # ["return"]
 		end
 	end
-	private :run_dll_function
-
-	def session_is_64bit?
-		client.platform =~ /64/
-	end
-
-	def session_is_unicode?
-		client.info
-	end
-
-	# turn a list of args into a good windows-in memory array, null terminated
-	def arrayify(*args)
-		# for now we return nil when args is empty, most win fxns don't want an empty string
-		args.empty? ? nil : args.join("\x00") + "\x00"
-	end
 
 	#
 	# Get default browser
 	#
 	# @return [String] The name of the default browser as stored in the registry
 	#
-	def default_browser
-		# @TODO actually write this
-		raise NotImplementedError "default_browser is not yet implemented."
+	# def default_browser
+	# 	# @TODO actually write this
+	# 	raise NotImplementedError "default_browser is not yet implemented."
 
-		# serviceskey = "HKLM\\SYSTEM\\CurrentControlSet\\Services"
-		# a =[]
-		# services = []
-		# keys = registry_enumkeys(serviceskey)
-
-		return default_browser_name
-	end
-	alias :get_default_browser :default_browser
+	# 	# serviceskey = "HKLM\\SYSTEM\\CurrentControlSet\\Services"
+	# 	# a =[]
+	# 	# services = []
+	# 	# keys = registry_enumkeys(serviceskey)
+	# 	default_browser_name = "IE"
+	# 	return default_browser_name
+	# end
+	# alias :get_default_browser :default_browser
 
 	#
 	# Allows an application to check if a connection to the Internet can be established.
@@ -181,11 +139,13 @@ module Browser
 		# Force reserved to be 0.  We leave it in the API in case it ever becomes un-reserved, then
 		#   our API won't change and we can just remove the line below
 		reserved = 0
-		run_dll_function(:wininet, :InternetCheckConnection, url, flags, reserved)
+		res = session.railgun.wininet.send(:InternetCheckConnection, url, flags, reserved)
+		handle_railgun_hash(res)
+		res["results"]
 	end
 	alias :check_internet_connection :internet_check_connection
 
-	module Ie
+	#module Ie
 		# API for Internet Explorer manipulation, automation, and control etc
 
 		# Basic Process:
@@ -203,8 +163,8 @@ module Browser
 	  # Do Stuff.  If called with a block, yields the http_request_handle for your pleasure and
 	  #   closes it, and all the associate "internet" handles when the block returns.
 	  #
-	  # @param [String] :url
 	  # @param [String] :server
+	  # @param [String] :resource
 	  # @param [String] :verb
 	  # @param [String] :agent
 	  # @option [Array<String>, String] :headers
@@ -215,20 +175,34 @@ module Browser
 	  #   {#internet_close_handle}, along with the other associated internet handles
 	  # @raise [RuntimeError] if InternetOpenUrl returns a NULL handle
 	  #
-	  def send_simple_http_request(server, resource, verb = "GET", agent = nil, *headers)
-	  	agent ||= UA_IE9_BASIC
+	  def send_simple_http_request(server, resource, opts = {})
+	  	puts "The host's pointer size is #{pointer}"
+			defaults = {  # defaults for args in opts hash
+				:verb => "GET",
+				# by default we just accept nearly anything
+				# but we haven't tested the array thing yet, so we're just gonna do text
+				:accept_types => "text/*",
+				# we'll need to figure this out tho, as we need application/json etc
+				#:accept_types => ["application/*", "text/*", "image/*", "audio/*", "video/*"],
+				:agent => UA_IE9_BASIC,
+				:headers => []
+			}
+			# Merge in defaults. This approach allows caller to safely pass in a nil
+			opts = defaults.merge(opts)
+
 	  	# we've only tested w/one header so far, need to see how to format
 	  	# multiple since it's supposed to be a Windows array, nil-terminated
 	  	# for now we concat w/nils and make sure one get's appended to the end
 	  	#win_hdrs = arrayify(headers) # @todo, I'm not sure they have to be arrayified as such
-	  	headers = headers.join('\r\n') + '\x00' # already null term'd, but screw it
+	  	opts[:headers] = opts[:headers].join('\r\n') + '\x00' # already null term'd, but screw it
 	  	# since HttpSendRequest says:  Pointer to a null-terminated string that contains the
 	  	# additional headers to be appended to the request. This parameter can be NULL if there
 	  	# are no additional headers to be appended.
 
-			internet_handle = _internet_open(agent)
-			session_handle = _internet_connect(internet_handle, server)
-			http_request_handle = _http_open_request(session_handle, obj, verb, "index.html", opts)
+			internet_handle = _internet_open(opts[:agent]) 							# InternetOpenA
+			session_handle = _internet_connect(internet_handle, server) # InternetConnectA
+			# accept types can be added manually as a header or via the actual mechanism
+			http_request_handle = _http_open_request(session_handle, resource, opts) # HttpOpenRequest
 	    if (block_given?)
 	      begin
 	        yield http_request_handle
@@ -238,7 +212,7 @@ module Browser
 	        _internet_close_handle(internet_handle)
 	      end
 	    else
-				succeeded = _http_send_request(http_request_handle, headers)
+				succeeded = _http_send_request(http_request_handle, opts) # HttpSendRequest
 				if succeeded
 					# check/read the response
 					# FYI, http_open_request_ex might actually be easier depending on how you read.
@@ -300,6 +274,7 @@ module Browser
     #   INTERNET_FLAG_OFFLINE - Identical to INTERNET_FLAG_FROM_CACHE
 
 		def _internet_open(agent, opts = {})
+			puts "internet_open received: #{agent} and opts:#{opts.inspect}"
 			defaults = {  # defaults for args in opts hash
         :access_type  => "INTERNET_OPEN_TYPE_PRECONFIG",
         :proxy_name   => nil,
@@ -309,15 +284,24 @@ module Browser
 
 			# Merge in defaults. This approach allows caller to safely pass in a nil
 			opts = defaults.merge(opts)
-
+			puts "after adding defaults:  #{agent} and opts:#{opts.inspect}"
+			#args = [:wininet, :InternetOpenA, agent,opts[:access_type],opts[:proxy_name],
+			#				opts[:proxy_bypass],opts[:flags]]
 			# Any arg validation can go here
 			# @todo determine how/when to send W version of this function
-			ret = run_dll_function(:wininet, :InternetOpenA, agent,
-                              opts[access_type],
-                              opts[proxy_name],
-                      				opts[proxy_bypass],
-                      				opts[flags]
-			)
+			# puts "Passing this to run_dll_function:#{args}"
+			ret = session.railgun.wininet.send(:InternetOpenA, agent,
+  	 	                          		opts[:access_type],
+  	 	                          		opts[:proxy_name],
+   		                   						opts[:proxy_bypass],
+  	 	                   						opts[:flags]
+																		)
+			# ret = session.railgun.send(:wininet).send(:InternetOpenA, agent,
+  	 	#                           opts[:access_type],
+  	 	#                           opts[:proxy_name],
+   		#                    				opts[:proxy_bypass],
+  	 	#                    				opts[:flags]
+			# )
 			if ret
 				ret["return"]
 			else
@@ -342,7 +326,7 @@ module Browser
 		# @option opts [String, Fixnum] :service ('INTERNET_SERVICE_HTTP') Type of service to
 		#   access (Windows constant as a Fixnum value or String representing the constant)
 		# @option opts [Fixnum] :flags (0) Options specific to the service used
-		# @option opts [Fixnum] :context (4) application-defined value used to identify app context
+		# @option opts [Fixnum] :context (+pointer+) pointer to application-defined value used to identify app context
 		#
 		def _internet_connect(internet, server, port = 'INTERNET_DEFAULT_HTTP_PORT', opts = {})
 			# NOTE:  see msdn for port values, you can't just pass 80 or 8080 etc
@@ -351,7 +335,7 @@ module Browser
 				:password => nil, # generally only useful w/FTP
 				:service => 'INTERNET_SERVICE_HTTP',
 				:flags => 0, # should always be 0 unless FTP passive mode desired
-				:context => 4 # should always be 4 for 32bit systems
+				:context => pointer # 4 for 32b, 8 for 64
 			}
 			# @todo determine arch of meterp and send 8 for context if required
 			# @todo determine how/when to send W version of this function, all A/W fxns really
@@ -363,12 +347,12 @@ module Browser
 			# @todo should normalize '/' and '\' if any
 			server = server.strip.split(/^[a-z]{3,}:\/\//i).last
 
-			ret = run_dll_function(:wininet, :InternetConnectA, internet, server, port,
-				opts[username],
-				opts[password],
-				opts[service],
-				opts[flags],
-				opts[context],
+			ret = session.railgun.wininet.send(:InternetConnectA, internet, server, port,
+				opts[:username],
+				opts[:password],
+				opts[:service],
+				opts[:flags],
+				opts[:context],
 			)
 			if ret
 				ret["return"]
@@ -396,7 +380,7 @@ module Browser
 		# @options opts [Fixnum] :context (0) application-defined & -specific context
 		# @raise [RuntimeError] if Windows returns an error
 		#
-		def _http_open_request(connect, object_name, verb = "GET", opts = {})
+		def _http_open_request(connect, object_name, opts = {})
 			flags_default = "INTERNET_FLAG_HYPERLINK | INTERNET_FLAG_IGNORE_CERT_CN_INVALID"
 			flags_default << " | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID"
 			flags_default << " | INTERNET_FLAG_IGNORE_REDIRECT_TO_HTTPS"
@@ -414,7 +398,7 @@ module Browser
 				# we'll need to figure this out tho, as we need application/json etc
 				#:accept_types => ["application/*", "text/*", "image/*", "audio/*", "video/*"],
 				:flags => flags_default,
-				:context => 0
+				:context => pointer
 			}
 
 			# Merge in defaults. This approach allows caller to safely pass in a nil
@@ -422,12 +406,12 @@ module Browser
 			# convert array to obedient windows array flattened to a string
 			opts[:accept_types] = arrayify(opts[:accept_types])
 
-			ret = run_dll_function(:wininet, :HttpOpenRequest, connect, verb, object_name,
-				opts[version],
-				opts[referer],
-				opts[lplpsz_accept_types],
-				opts[flags],
-				opts[context]
+			ret = session.railgun.wininet.send(:HttpOpenRequest, connect, opts[:verb], object_name,
+				opts[:version],
+				opts[:referer],
+				opts[:accept_types],
+				opts[:flags],
+				opts[:context]
 			)
 
 			if ret
@@ -454,8 +438,10 @@ module Browser
 		#   data to be sent immediately after the request headers, useful for PUT/POST etc
 		# @options opts [Fixnum, 0] :optional_length Size of the optional data, in bytes
 		#
-		def _http_send_request(request, headers, headers_length = -1, opts = {})
+		def _http_send_request(request, opts = {})
 			defaults = {  # defaults for args in opts hash
+				:headers => nil, # @todo should it be nil or "\x00" or what?
+				:headers_length => -1,
 				:optional => nil,
 				:optional_length => 0
 			}
@@ -465,9 +451,11 @@ module Browser
 
 			# calculate length in TCHARs if needed here.  .length * 2 + 1 right?
 
-			ret = run_dll_function(:wininet, :HttpSendRequest, request, headers, headers_length,
-				opts[optional],
-				opts[optional_length],
+			ret = session.railgun.wininet.send(:HttpSendRequest, request,
+				opts[:headers],
+				opts[:headers_length],
+				opts[:optional],
+				opts[:optional_length]
 			)
 
 			if ret
@@ -476,7 +464,6 @@ module Browser
 				false
 			end
 		end
-
 
 
 
@@ -504,9 +491,9 @@ module Browser
     #   INTERNET_FLAG_NO_COOKIES,INTERNET_FLAG_NO_UI,INTERNET_FLAG_PASSIVE,
     #   INTERNET_FLAG_PRAGMA_NOCACHE,INTERNET_FLAG_RAW_DATA,INTERNET_FLAG_RELOAD,
     #   INTERNET_FLAG_RESYNCHRONIZE,INTERNET_FLAG_SECURE
-		# @param [Fixnum] dw_context A pointer to a variable specifying the
+		# @param [Fixnum] context A pointer to a variable specifying the
     #   application-defined value that is passed, along with the returned handle,
-    #   to any callback functions
+    #   to any callback functions.  Pass the pointer size (4 for 32b)
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
 		# up the API, you should review it and adjust as needed.  You may want
@@ -517,8 +504,8 @@ module Browser
 		def _internet_open_url(internet, url, headers, opts = {})
 			defaults = {  # defaults for args in opts hash
 				:headers_length => headers_length_default,
-				:flags => flags_default,
-				:context => context_default
+				:flags => flags_default, # @todo
+				:context => pointer
 			}
 
 			# Merge in defaults. This approach allows caller to safely pass in a nil
@@ -531,10 +518,10 @@ module Browser
 				url = 'http://' + url
 			end
 
-			ret = run_dll_function(:wininet, :InternetOpenUrl, internet, url, headers,
-				opts[headers_length],
-				opts[flags],
-				opts[context],
+			ret = session.railgun.wininet.send(:InternetOpenUrl, internet, url, headers,
+				opts[:headers_length],
+				opts[:flags],
+				opts[:context],
 			)
 
 			# Additional code goes here
@@ -565,7 +552,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			run_dll_function(:wininet, :HttpAddRequestHeaders,
+			session.railgun.wininet.send(:HttpAddRequestHeaders,
 									request,
 									headers,
 									opts[:headers_length],
@@ -596,7 +583,7 @@ module Browser
 			#   However, in this case, they shouldn't be allowed to do so as all the possibilities
 			#   are currently reserved, so we reverse the merge call to enforce the reserved values.
 			opts = opts.merge(defaults)
-			run_dll_function(:wininet, :HttpEndRequest, request,
+			session.railgun.wininet.send(:HttpEndRequest, request,
 									opts[:buffers_out],
 									opts[:flags],
 									opts[:context]
@@ -630,7 +617,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :HttpQueryInfo, request, info_level, buffer,
+			ret = session.railgun.wininet.send(:HttpQueryInfo, request, info_level, buffer,
 				buffer_length, index
 			)
 
@@ -649,7 +636,7 @@ module Browser
 		# @param [Fixnum] lp_buffers_in Optional
 		# @param [Unknown] lp_buffers_out Reserved
 		# @param [Fixnum] dw_flags Reserved
-		# @param [Fixnum] dw_context Application-defined context value, if a status callback function has been registered
+		# @param [Fixnum] :context Application-defined context value, if a status callback function has been registered
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
 		# up the API, you should review it and adjust as needed.  You may want
@@ -660,7 +647,7 @@ module Browser
 		def _http_send_request_ex(request, buffers_in, buffers_out, opts = {})
 			defaults = {  # defaults for args in opts hash
 				:flags => flags_default,
-				:context => context_default
+				:context => pointer
 			}
 
 			# Merge in defaults. This approach allows caller to safely pass in a nil
@@ -668,9 +655,9 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :HttpSendRequestEx, request, buffers_in, buffers_out,
-				opts[flags],
-				opts[context],
+			ret = session.railgun.wininet.send(:HttpSendRequestEx, request, buffers_in, buffers_out,
+				opts[:flags],
+				opts[:context],
 			)
 
 			# Additional code goes here
@@ -689,7 +676,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetAttemptConnect, reserved)
+			ret = session.railgun.wininet.send(:InternetAttemptConnect, reserved)
 
 			# Additional code goes here
 
@@ -706,7 +693,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetCloseHandle, internet)
+			ret = session.railgun.wininet.send(:InternetCloseHandle, internet)
 
 			# Additional code goes here
 
@@ -714,20 +701,27 @@ module Browser
 
 		#
 		# Retrieves the connected state of the local system.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384702(v=vs.85).aspx InternetGetConnectedState
+		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384702(v=vs.85).aspx
+		#   InternetGetConnectedState
 
-		# @return [Boolean] Returns true if there is an active modem or a LAN Internet connection, or false if there is no Internet connection, or if all possible Internet connections are not currently active
-		# @param [Fixnum] lpdw_flags Pointer to a variable that receives  the connection description
-		# @param [Fixnum] dw_reserved This parameter is reserved and must be 0
+		# @return [Fixnum, false] Returns a Fixnum representing the flags returned by the winapi
+		#   function call if successful (an active modem or a LAN Internet connection) or false if
+		#   there is no Internet connection or all possible Internet connections are not active
+		# @param [Fixnum] :flags PDWORD to a variable that receives the connection description.
+		#   Should be 4 on 32-bit systems.
+		# @param [Fixnum] :reserved This parameter is reserved and must be 0
 		#
-		def _internet_get_connected_state(flags, reserved)
+		def _internet_get_connected_state(flags = pointer , reserved = 0)
 
 			# Any arg validation can go here
-
-			ret = run_dll_function(:wininet, :InternetGetConnectedState, flags, reserved)
-
-			# Additional code goes here
-
+			# @todo, should flags be set to 8 when x64?  it's a pdword, not dword
+			ret = session.railgun.wininet.send(:InternetGetConnectedState, flags, reserved)
+			handle_railgun_hash(res)
+			if res["results"]
+				flags
+			else
+				false
+			end
 		end
 
 		#
@@ -736,10 +730,11 @@ module Browser
     #   InternetGetConnectedStateEx
 
 		# @return [Boolean] Returns true if there is an available connection otherwise false
-		# @param [Fixnum] lpdw_flags Pointer to a variable that receives the connection description
-		# @param [Fixnum] lpsz_connection_name String value that receives the connection name
-		# @param [Fixnum] dw_name_len Size of the lpszConnectionName string, in TCHARs
-		# @param [Fixnum] dw_reserved This parameter is reserved and must be NULL
+		# @param [Fixnum] :flags(+pointer+) Pointer to a variable that receives the
+		#   connection description
+		# @param [String] :connection_name String value that receives the connection name
+		# @param [Fixnum] :name_len Size of the lpszConnectionName string, in TCHARs
+		# @param [Fixnum] :reserved(nil) This parameter is reserved and must be NULL
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
 		# up the API, you should review it and adjust as needed.  You may want
@@ -747,9 +742,10 @@ module Browser
 		# left at default values, or are optional, or always a specific value,
 		# etc, are put in the opts hash.  Or, you may want to get rid of the
 		# opts hash entirely.
-		def _internet_get_connected_state_ex(flags, connection_name, name_len, opts = {})
+		def _internet_get_connected_state_ex(connection_name, name_len = -1, opts = {})
 			defaults = {  # defaults for args in opts hash
-				:reserved => reserved_default
+				:flags => pointer,
+				:reserved => nil
 			}
 
 			# Merge in defaults. This approach allows caller to safely pass in a nil
@@ -757,8 +753,9 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetGetConnectedStateEx, flags, connection_name, name_len,
-				opts[reserved],
+			ret = session.railgun.wininet.send(:InternetGetConnectedStateEx, opts[:flags], connection_name,
+				name_len,
+				opts[:reserved]
 			)
 
 			# Additional code goes here
@@ -773,16 +770,20 @@ module Browser
 
 		# @return [Boolean] Returns true if error text was successfully written to
     #   the buffer, otherwise false
-		# @param [Fixnum] lpdw_error Pointer to a variable that receives an error
+		# @param [Fixnum] :error Pointer to a variable that receives an error
     #   message pertaining to the operation that failed
-		# @param [String] lpsz_buffer the error text
-		# @param [Fixnum] lpdw_buffer_length the size of the error text, in TCHARs
+		# @param [String] buffer the error text
+		# @param [Fixnum] buffer_length the size of the error text, in TCHARs
 		#
-		def _internet_get_last_response_info(error, buffer, buffer_length)
+		def _internet_get_last_response_info(buffer, buffer_length = -1, error = pointer)
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetGetLastResponseInfo, error, buffer, buffer_length)
+			ret = session.railgun.wininet.send(:InternetGetLastResponseInfo,
+							error,
+							buffer,
+							buffer_length
+							)
 
 			# Additional code goes here
 
@@ -794,12 +795,12 @@ module Browser
     #   InternetQueryDataAvailable
 
 		# @return [Boolean] Returns True on success
-		# @param [Handle] h_file Handle returned by InternetOpenUrl,
+		# @param [Handle] :file Handle returned by InternetOpenUrl,
     #   FtpOpenFile, GopherOpenFile, or HttpOpenRequest
-		# @param [Fixnum] lpdw_number_of_bytes_available Pointer to a variable to
+		# @param [Fixnum] :number_of_bytes_available Pointer to a variable to
     #   receive the number of available bytes
-		# @param [Fixnum] dw_flags This parameter is reserved and must be 0
-		# @param [Fixnum] dw_context This parameter is reserved and must be 0
+		# @param [Fixnum] :flags This parameter is reserved and must be 0
+		# @param [Fixnum] :context This parameter is reserved and must be 0
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
 		# up the API, you should review it and adjust as needed.  You may want
@@ -807,7 +808,7 @@ module Browser
 		# left at default values, or are optional, or always a specific value,
 		# etc, are put in the opts hash.  Or, you may want to get rid of the
 		# opts hash entirely.
-		def _internet_query_data_available(file, number_of_bytes_available, flags=0, context=0)
+		def _internet_query_data_available(file, number_of_bytes_available=pointer, flags=0, context=0)
       # hardcode these values since they are reserved, delete these lines if
       # they ever become un-reserved
       flags = 0
@@ -815,7 +816,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetQueryDataAvailable,
+			ret = session.railgun.wininet.send(:InternetQueryDataAvailable,
                               file,
                               number_of_bytes_available,
                               flags,
@@ -832,10 +833,10 @@ module Browser
     #   InternetQueryOption
 
 		# @return [Boolean] Returns true if successful, or false otherwise
-		# @param [Handle] h_internet Handle on which to query information
-		# @param [Fixnum] dw_option Internet option to be queried
-		# @param [Unknown] lp_buffer Pointer to a buffer to receive option setting
-		# @param [Fixnum] lpdw_buffer_length Pointer to a variable that contains the
+		# @param [Handle] :internet Handle on which to query information
+		# @param [Fixnum] :option Internet option to be queried
+		# @param [Unknown] :buffer Pointer to a buffer to receive option setting
+		# @param [Fixnum] :buffer_length Pointer to a variable that contains the
     #   size of lpBuffer, in bytes
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
@@ -844,9 +845,9 @@ module Browser
 		# left at default values, or are optional, or always a specific value,
 		# etc, are put in the opts hash.  Or, you may want to get rid of the
 		# opts hash entirely.
-		def _internet_query_option(internet, option, buffer, opts = {})
+		def _internet_query_option(internet, option, buffer = pointer, opts = {})
 			defaults = {  # defaults for args in opts hash
-				:buffer_length => buffer_length_default
+				:buffer_length => -1 # @todo, is this valid?
 			}
 
 			# Merge in defaults. This approach allows caller to safely pass in a nil
@@ -854,8 +855,8 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetQueryOption, internet, option, buffer,
-				opts[buffer_length],
+			ret = session.railgun.wininet.send(:InternetQueryOption, internet, option, buffer,
+				opts[:buffer_length],
 			)
 
 			# Additional code goes here
@@ -869,11 +870,11 @@ module Browser
     #   InternetReadFile
 
 		# @return [Boolean] Returns true if successful otherwise false
-		# @param [Handle] h_file Handle returned from a previous call to
+		# @param [Handle] :file Handle returned from a previous call to
     #   InternetOpenUrl, FtpOpenFile, or HttpOpenRequest
-		# @param [Unknown] lp_buffer Pointer to a buffer to receive the data
-		# @param [Fixnum] dw_number_of_bytes_to_read Number of bytes to be read
-		# @param [Fixnum] lpdw_number_of_bytes_read Pointer to a variable to receive
+		# @param [Fixnum] :buffer Pointer to a buffer to receive the data (pass pointer size)
+		# @param [Fixnum] :number_of_bytes_to_read Number of bytes to be read
+		# @param [Fixnum] :number_of_bytes_read Pointer to a variable to receive
     #   the number of bytes read
 		#
 		# There are quite a few arguments so an opts hash was added.  To clean
@@ -882,9 +883,9 @@ module Browser
 		# left at default values, or are optional, or always a specific value,
 		# etc, are put in the opts hash.  Or, you may want to get rid of the
 		# opts hash entirely.
-		def _internet_read_file(file, buffer, number_of_bytes_to_read, opts = {})
+		def _internet_read_file(file, number_of_bytes_to_read, buffer = pointer, opts = {})
 			defaults = {  # defaults for args in opts hash
-				:number_of_bytes_read => number_of_bytes_read_default
+				:number_of_bytes_read => pointer
 			}
 
 			# Merge in defaults. This approach allows caller to safely pass in a nil
@@ -892,7 +893,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetReadFile, file, buffer, number_of_bytes_to_read,
+			ret = session.railgun.wininet.send(:InternetReadFile, file, buffer, number_of_bytes_to_read,
 				opts[number_of_bytes_read],
 			)
 
@@ -927,8 +928,8 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetReadFileEx, file, buffers_out, flags,
-				opts[context],
+			ret = session.railgun.wininet.send(:InternetReadFileEx, file, buffers_out, flags,
+				opts[:context],
 			)
 
 			# Additional code goes here
@@ -950,7 +951,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetSetCookie, url, cookie_name, cookie_data)
+			ret = session.railgun.wininet.send(:InternetSetCookie, url, cookie_name, cookie_data)
 
 			# Additional code goes here
 
@@ -985,9 +986,9 @@ module Browser
 
 			# Any arg validation can go here, such as the low/high bit stuff
 
-			ret = run_dll_function(:wininet, :InternetSetFilePointer, file, distance_to_move, distance_to_move_high,
-				opts[move_method],
-				opts[context]
+			ret = session.railgun.wininet.send(:InternetSetFilePointer, file, distance_to_move, distance_to_move_high,
+				opts[:move_method],
+				opts[:context]
 			)
 
 			# Additional code goes here
@@ -1010,7 +1011,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetSetOption, handle, option, buffer, buffer_length)
+			ret = session.railgun.wininet.send(:InternetSetOption, handle, option, buffer, buffer_length)
 
 			# Additional code goes here
 
@@ -1029,7 +1030,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetUnlockRequestFile, lock_request_info)
+			ret = session.railgun.wininet.send(:InternetUnlockRequestFile, lock_request_info)
 
 			# Additional code goes here
 
@@ -1066,7 +1067,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :InternetWriteFile,
+			ret = session.railgun.wininet.send(:InternetWriteFile,
                               file,
                               buffer,
                               number_of_bytes_to_write,
@@ -1093,14 +1094,21 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = run_dll_function(:wininet, :ResumeSuspendedDownload,
+			ret = session.railgun.wininet.send(:ResumeSuspendedDownload,
                              request,
                              result_code)
 
 			# Additional code goes here
 
 		end
-	end # Ie
+
+		# turn a list of args into a good windows-in memory array, null terminated
+		def arrayify(*args)
+			# for now we return nil when args is empty, most win fxns don't want an empty string
+			args.empty? ? nil : args.join("\x00") + "\x00"
+		end
+
+	#end # Ie
 end # Browser
 end # Windows
 end # Post
