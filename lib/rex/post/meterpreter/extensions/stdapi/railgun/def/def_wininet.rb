@@ -365,7 +365,7 @@ class Def_wininet
 			['DWORD', 'InfoLevel', 'in'],
 			['LPVOID', 'Buffer', 'inout'], # like WSAIoctl in ws2_32.  Must not be null
 			['PDWORD', 'BufferLength', 'inout'], # like WSALookupServiceNextA in ws2_32
-			['PDWORD', 'Index', 'inout']
+			['DWORD', 'Index', 'inout']
 		])
 
 		dll.add_function('HttpQueryInfoW', 'BOOL', [
@@ -380,7 +380,7 @@ class Def_wininet
 			['HANDLE', 'Request', 'in'],
 			['PCHAR', 'Headers', 'in'],
 			['DWORD', 'HeadersLength', 'in'], # in TCHARs, -1
-			['LPVOID', 'Optional', 'in'], # for add'l data like for a POST or PUT, nil
+			['PBLOB', 'Optional', 'in'], # for add'l data like for a POST or PUT, nil
 			['DWORD', 'OptionalLength', 'in'] # in bytes, 0 if above is nil
 		])
 
@@ -388,7 +388,7 @@ class Def_wininet
 			['HANDLE', 'Request', 'in'],
 			['PWCHAR', 'Headers', 'in'],
 			['DWORD', 'HeadersLength', 'in'],
-			['LPVOID', 'Optional', 'in'],
+			['PBLOB', 'Optional', 'in'],
 			['DWORD', 'OptionalLength', 'in']
 		])
 		# recommend you use HttpSendRequest, not the Ex version, to avoid complex data structs
@@ -537,11 +537,18 @@ class Def_wininet
 			['DWORD', 'Reserved', 'in'] # must be 0
     ])
 
-		dll.add_function('InternetGetConnectedStateEx', 'BOOL', [
+		dll.add_function('InternetGetConnectedStateExA', 'BOOL', [
 			['PDWORD', 'Flags', 'out'],
 			['PCHAR', 'ConnectionName', 'out'],
 			['DWORD', 'NameLen', 'in'],
 			['DWORD', 'Reserved', 'in'] # must be null
+    ])
+
+    dll.add_function('InternetGetConnectedStateExW', 'BOOL', [
+      ['PDWORD', 'Flags', 'out'],
+      ['PWCHAR', 'ConnectionName', 'out'],
+      ['DWORD', 'NameLen', 'in'],
+      ['DWORD', 'Reserved', 'in'] # must be null
     ])
 
 		# dll.add_function('InternetGetCookie', 'BOOL', [
@@ -560,10 +567,16 @@ class Def_wininet
 		# 	['PDWORD', 'Reserved', 'in']
   #   ])
 
-		dll.add_function('InternetGetLastResponseInfo', 'BOOL', [
+		dll.add_function('InternetGetLastResponseInfoA', 'BOOL', [
 			['PDWORD', 'Error', 'out'],
 			['PCHAR', 'Buffer', 'out'],
 			['PDWORD', 'BufferLength', 'inout']
+    ])
+
+    dll.add_function('InternetGetLastResponseInfoW', 'BOOL', [
+      ['PDWORD', 'Error', 'out'],
+      ['PWCHAR', 'Buffer', 'out'],
+      ['PDWORD', 'BufferLength', 'inout']
     ])
 
 		# dll.add_function('InternetGetPerSiteCookieDecision', 'BOOL', [
@@ -650,16 +663,23 @@ class Def_wininet
 
 		dll.add_function('InternetReadFile', 'BOOL', [
 			['HANDLE', 'File', 'in'],
-			['LPVOID', 'Buffer', 'out'],
+			['PBLOB', 'Buffer', 'out'],
 			['DWORD', 'NumberOfBytesToRead', 'in'],
 			['PDWORD', 'NumberOfBytesRead', 'out']
     ])
 
-		dll.add_function('InternetReadFileEx', 'BOOL', [
+		dll.add_function('InternetReadFileExA', 'BOOL', [
 			['HANDLE', 'File', 'in'],
 			['PBLOB', 'BuffersOut', 'out'],
 			['DWORD', 'Flags', 'in'],
 			['PDWORD', 'Context', 'in']
+    ])
+
+    dll.add_function('InternetReadFileExW', 'BOOL', [
+      ['HANDLE', 'File', 'in'],
+      ['PBLOB', 'BuffersOut', 'out'],
+      ['DWORD', 'Flags', 'in'],
+      ['PDWORD', 'Context', 'in']
     ])
 
 		# dll.add_function('InternetSetCookie', 'BOOL', [
@@ -684,11 +704,18 @@ class Def_wininet
 			['PDWORD', 'Context', 'in'] # must be 0
     ])
 
-		dll.add_function('InternetSetOption', 'BOOL', [
+		dll.add_function('InternetSetOptionA', 'BOOL', [
 			['HANDLE', 'Internet', 'in'],
 			['DWORD', 'Option', 'in'],
 			['LPVOID', 'Buffer', 'in'],
 			['DWORD', 'BufferLength', 'in'] # size in TCHAR if Buffer is a string, else bytes
+    ])
+
+    dll.add_function('InternetSetOptionW', 'BOOL', [
+      ['HANDLE', 'Internet', 'in'],
+      ['DWORD', 'Option', 'in'],
+      ['LPVOID', 'Buffer', 'in'],
+      ['DWORD', 'BufferLength', 'in'] # size in TCHAR if Buffer is a string, else bytes
     ])
 
 		# dll.add_function('InternetSetPerSiteCookieDecision', 'BOOL', [

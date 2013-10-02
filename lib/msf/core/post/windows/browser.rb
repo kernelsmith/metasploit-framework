@@ -6,6 +6,7 @@ module Windows
 
 module Browser
 	# API for browser manipulation, automation, and control etc
+
 	# methods starting with "_" are public by design, but not normally needed by most callers
 
 	# @TODO:  if nec, enact a lazy load since most people won't use this mixin
@@ -85,12 +86,18 @@ module Browser
 		session.railgun.util.pointer_size
 	end
 
-	def handle_railgun_hash(results, function, dll = "wininet")
-		err = results["GetLastError"]
+	def handle_railgun_hash(results, function, dll = "WinINet")
+    function = function.to_s # in case we get it as symbol
+    dll = dll.to_s.sub(/\.dll$/,'') # in case we get it as a symbol and/or .dll included
+    # we received
+    puts "Railgun returned #{results.inspect} for #{dll}!#{function}"
+		err = results['GetLastError']
 		if not err == 0
+      puts "Error code was not 0"
 			err_code = results['GetLastError']
 			error_msg = "Error running #{dll}.dll function.  #{function} error code: #{err_code}\n"
-			error_msg += "This WinAPI error may mean:  #{lookup_error(err_code, /^ERROR_/)}"
+			#error_msg += "This WinAPI error may mean:  #{lookup_error(err_code, /^ERROR_/)}"
+      puts error_msg
 			# @todo subclass ? RuntimeError so we can return err msg plus the stuff from railgun?
 			# @todo use railgun error lookups, errors will be ERROR_INTERNET and just ERROR_
 			raise RuntimeError.new(error_msg)
@@ -139,7 +146,7 @@ module Browser
 		# Force reserved to be 0.  We leave it in the API in case it ever becomes un-reserved, then
 		#   our API won't change and we can just remove the line below
 		reserved = 0
-		res = session.railgun.wininet.send(:InternetCheckConnection, url, flags, reserved)
+		res = session.railgun.wininet.send(:InternetCheckConnectionA, url, flags, reserved)
 		handle_railgun_hash(res)
 		res["results"]
 	end
@@ -189,32 +196,46 @@ module Browser
 			}
 			# Merge in defaults. This approach allows caller to safely pass in a nil
 			opts = defaults.merge(opts)
-
+      puts "after adding defaults, send_simple_http_request has"
+      puts "#{opts[:headers].length.to_s} headers which are:#{opts[:headers].inspect}"
 	  	# we've only tested w/one header so far, need to see how to format
 	  	# multiple since it's supposed to be a Windows array, nil-terminated
 	  	# for now we concat w/nils and make sure one get's appended to the end
 	  	#win_hdrs = arrayify(headers) # @todo, I'm not sure they have to be arrayified as such
-	  	opts[:headers] = opts[:headers].join('\r\n') + '\x00' # already null term'd, but screw it
+	  	opts[:headers] = opts[:headers].join("\r\n") + "\r\n" # join won't add one to the end
 	  	# since HttpSendRequest says:  Pointer to a null-terminated string that contains the
 	  	# additional headers to be appended to the request. This parameter can be NULL if there
 	  	# are no additional headers to be appended.
 
 			internet_handle = _internet_open(opts[:agent]) 							# InternetOpenA
+      puts "InternetOpen returned #{internet_handle.to_s} (handle)"
 			session_handle = _internet_connect(internet_handle, server) # InternetConnectA
+      puts "InternetConnect returned #{session_handle.to_s} (handle)"
 			# accept types can be added manually as a header or via the actual mechanism
 			http_request_handle = _http_open_request(session_handle, resource, opts) # HttpOpenRequest
+      puts "HttpOpenRequest returned #{http_request_handle.to_s} (handle)"
 	    if (block_given?)
 	      begin
 	        yield http_request_handle
 	      ensure
-	        _internet_close_handle(http_request_handle)
-	        _internet_close_handle(session_handle)
-	        _internet_close_handle(internet_handle)
+	        _http_end_request(http_request_handle) if http_request_handle
+	        _internet_close_handle(session_handle) if session_handle
+	        _internet_close_handle(internet_handle) if internet_handle
 	      end
 	    else
-				succeeded = _http_send_request(http_request_handle, opts) # HttpSendRequest
-				if succeeded
-					# check/read the response
+        # user passes opts[:data] to pass in PUT/POST data, so we pass this on if nec, but
+        # it needs to be opts[:optional] and needs a length
+        if opts[:data]
+          opts[:optional] = opts[:data]
+          opts[:optional_length] = opts[:optional].length
+        end
+
+				err_code = _http_send_request(http_request_handle, opts) # HttpSendRequest
+        puts "HttpSendRequest returned #{err_code.to_s} (false on success, else err_code)"
+				if err_code
+          false
+        else
+          # successful comms, let's check/read the response
 					# FYI, http_open_request_ex might actually be easier depending on how you read.
 					#
 					# After the request is sent, the status code and response headers from the HTTP
@@ -230,9 +251,16 @@ module Browser
 					# An application can use the same HTTP request handle in multiple calls to
 					# HttpSendRequest, but the application must read all data returned from the previous
 					# call before calling the function again.
-				else
-					return nil
+
+          # simple for now
+          body = get_http_body(http_request_handle)
+          puts "Returning the body:#{body} from send_simple_http_request"
+          body || true
 				end
+        # @todo: register open handles in an array and use a method to close them all etc
+        _internet_close_handle(http_request_handle) if http_request_handle
+        _internet_close_handle(session_handle) if session_handle
+        _internet_close_handle(internet_handle) if internet_handle
 			end
 	  end
 
@@ -274,12 +302,13 @@ module Browser
     #   INTERNET_FLAG_OFFLINE - Identical to INTERNET_FLAG_FROM_CACHE
 
 		def _internet_open(agent, opts = {})
+      func = :InternetOpenA
 			puts "internet_open received: #{agent} and opts:#{opts.inspect}"
 			defaults = {  # defaults for args in opts hash
-        :access_type  => "INTERNET_OPEN_TYPE_PRECONFIG",
+        :access_type  => 0, # was 0, # was INTERNET_OPEN_TYPE_PRECONFIG
         :proxy_name   => nil,
 				:proxy_bypass => nil,
-				:flags => 'INTERNET_FLAG_ASYNC | INTERNET_FLAG_FROM_CACHE'
+				:flags => 0 # was 'INTERNET_FLAG_ASYNC | INTERNET_FLAG_FROM_CACHE'
 			}
 
 			# Merge in defaults. This approach allows caller to safely pass in a nil
@@ -290,12 +319,13 @@ module Browser
 			# Any arg validation can go here
 			# @todo determine how/when to send W version of this function
 			# puts "Passing this to run_dll_function:#{args}"
-			ret = session.railgun.wininet.send(:InternetOpenA, agent,
+			ret = session.railgun.wininet.send(func, agent,
   	 	                          		opts[:access_type],
   	 	                          		opts[:proxy_name],
    		                   						opts[:proxy_bypass],
   	 	                   						opts[:flags]
 																		)
+      handle_railgun_hash(ret, func)
 			# ret = session.railgun.send(:wininet).send(:InternetOpenA, agent,
   	 	#                           opts[:access_type],
   	 	#                           opts[:proxy_name],
@@ -328,9 +358,12 @@ module Browser
 		# @option opts [Fixnum] :flags (0) Options specific to the service used
 		# @option opts [Fixnum] :context (+pointer+) pointer to application-defined value used to identify app context
 		#
-		def _internet_connect(internet, server, port = 'INTERNET_DEFAULT_HTTP_PORT', opts = {})
-			# NOTE:  see msdn for port values, you can't just pass 80 or 8080 etc
-			defaults = {  # defaults for args in opts hash
+		def _internet_connect(internet, server, port = 'INTERNET_INVALID_PORT_NUMBER', opts = {})
+			# NOTE:  see msdn for port values, you can't just pass 80 or 8080 etc, also
+      # INTERNET_INVALID_PORT_NUMBER (0x0) will get translated to default port for given service
+			# might need WinHTTP.dll functions to call arbitrary tcp/ip ports
+      # @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384091(v=vs.85).aspx
+      defaults = {  # defaults for args in opts hash
 				:username => nil, # generally only useful w/FTP
 				:password => nil, # generally only useful w/FTP
 				:service => 'INTERNET_SERVICE_HTTP',
@@ -406,15 +439,15 @@ module Browser
 			# convert array to obedient windows array flattened to a string
 			opts[:accept_types] = arrayify(opts[:accept_types])
 
-			ret = session.railgun.wininet.send(:HttpOpenRequest, connect, opts[:verb], object_name,
+			ret = session.railgun.wininet.send(:HttpOpenRequestA, connect, opts[:verb], object_name,
 				opts[:version],
 				opts[:referer],
 				opts[:accept_types],
 				opts[:flags],
 				opts[:context]
 			)
-
 			if ret
+        puts "ret is #{ret.inspect} (hash)"
 				ret["return"]
 			else
 				false
@@ -451,21 +484,180 @@ module Browser
 
 			# calculate length in TCHARs if needed here.  .length * 2 + 1 right?
 
-			ret = session.railgun.wininet.send(:HttpSendRequest, request,
+			ret = session.railgun.wininet.send(:HttpSendRequestA, request,
 				opts[:headers],
 				opts[:headers_length],
 				opts[:optional],
 				opts[:optional_length]
 			)
-
+      puts "HttpSendRequest return hash:#{ret.inspect}"
 			if ret
-				ret["return"]
-			else
-				false
+        err_code = ret['GetLastError']
+				unless err_code == 0
+          puts "Error code from HttpSendRequest via rails is:#{err_code}"
+          puts "The error text may be #{lookup_error(err_code)}"
+          ret err_code
+        end
 			end
+      return false # false is success here
 		end
 
+    #
+    # Retrieves the last error description or server response on the thread
+    #   calling this function.
+    # @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384717(v=vs.85).aspx
+    #   InternetGetLastResponseInfo
 
+    # @return [Boolean] Returns true if error text was successfully written to
+    #   the buffer, otherwise false
+    # @param [Fixnum] :error Pointer to a variable that receives an error
+    #   message pertaining to the operation that failed
+    # @param [String] buffer the error text
+    # @param [Fixnum] buffer_length the size of the error text, in TCHARs
+    #
+    def _internet_get_last_response_info(buffer, buffer_length = -1, error = pointer)
+
+      # Any arg validation can go here
+
+      ret = session.railgun.wininet.send(:InternetGetLastResponseInfoA,
+              error,
+              buffer,
+              buffer_length
+              )
+
+      # Additional code goes here
+
+    end
+
+    #
+    # Reads data from a handle opened by InternetOpenUrl, FtpOpenFile, or
+    #   HttpOpenRequest
+    # @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385103(v=vs.85).aspx
+    #   InternetReadFile
+
+    # @return [Boolean] Returns true if successful otherwise false
+    # @param [Handle] :file Handle returned from a previous call to
+    #   InternetOpenUrl, FtpOpenFile, or HttpOpenRequest
+    # @param [Fixnum] :buffer Pointer to a buffer to receive the data (pass pointer size)
+    # @param [Fixnum] :number_of_bytes_to_read Number of bytes to be read
+    # @param [Fixnum] :number_of_bytes_read Pointer to a variable to receive
+    #   the number of bytes read
+    #
+    def _internet_read_file(file, number_of_bytes_to_read, opts = {})
+      defaults = {  # defaults for args in opts hash
+        :buffer => number_of_bytes_to_read, #pointer,
+        :number_of_bytes_read => pointer
+      }
+
+      # Merge in defaults. This approach allows caller to safely pass in a nil
+      opts = defaults.merge(opts)
+
+      # Any arg validation can go here
+
+      ret = session.railgun.wininet.send(:InternetReadFile, file,
+        opts[:buffer],
+        number_of_bytes_to_read,
+        opts[:number_of_bytes_read]
+      )
+
+      # Additional code goes here
+
+    end
+
+    def get_http_body(file_handle, number_of_bytes_to_read = 256)
+      # @todo, handle reading more bytes if nec, insufficient buffer etc
+      # @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385103(v=vs.85).aspx
+      res = _internet_query_data_available(file_handle, 4, 0, 0)
+      bytes_avail = res["NumberOfBytesAvailable"]
+      if (bytes_avail and not bytes_avail == 0)
+        res = _internet_read_file(file_handle, bytes_avail)
+        puts "_internet_read_file returns #{res} with body being #{res["Buffer"]}"
+      else
+        puts "There are no bytes available for reading"
+        return nil
+      end
+      if res["GetLastError"] == 0
+        res["Buffer"]
+      else
+        nil
+      end
+    end
+
+    #
+    # Queries an Internet option on the specified handle.
+    # @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385101(v=vs.85).aspx
+    #   InternetQueryOption
+
+    # @return [Boolean] Returns true if successful, or false otherwise
+    # @param [Handle] :internet Handle on which to query information
+    # @param [Fixnum] :option Internet option to be queried
+    # @param [Unknown] :buffer Pointer to a buffer to receive option setting
+    # @param [Fixnum] :buffer_length Pointer to a variable that contains the
+    #   size of lpBuffer, in bytes
+    #
+    # There are quite a few arguments so an opts hash was added.  To clean
+    # up the API, you should review it and adjust as needed.  You may want
+    # to consider regrouping args for: clarity, so args that are usually
+    # left at default values, or are optional, or always a specific value,
+    # etc, are put in the opts hash.  Or, you may want to get rid of the
+    # opts hash entirely.
+    def _internet_query_option(internet, option, buffer = pointer, opts = {})
+      defaults = {  # defaults for args in opts hash
+        :buffer_length => -1 # @todo, is this valid?
+      }
+
+      # Merge in defaults. This approach allows caller to safely pass in a nil
+      opts = defaults.merge(opts)
+
+      # Any arg validation can go here
+
+      ret = session.railgun.wininet.send(:InternetQueryOptionA, internet, option, buffer,
+        opts[:buffer_length],
+      )
+
+      # Additional code goes here
+
+    end
+
+    #
+    # Ends an HTTP request that was initiated by HttpSendRequestEx.
+    # @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384230(v=vs.85).aspx
+    #   HttpEndRequest
+    # @return [Boolean] true on success, otherwise false
+    # @param [Handle] request Handle returned by HttpOpenRequest and sent by HttpSendRequestEx
+    # @param [Nil] buffers_out Parameter is reserved and must be NULL
+    # @param [Fixnum] flags Parameter is reserved and must be set to 0
+    # @param [Fixnum] context Parameter is reserved and must be set to 0
+    # @raise [RuntimeError] if Windows returns an error
+    #
+    def _http_end_request(request, opts = {})
+      reserved = {  # defaults for args in opts hash
+        :buffers_out => nil, # reserved, must be nil
+        :flags       => 0,   # reserved, must be 0
+        :context     => 0,   # reserved, must be 0
+      }
+
+      # Normally, we use the following to merge in defaults cuz it allows caller to pass in a nil:
+      #   opts = defaults.merge(opts)
+      #   However, in this case, they shouldn't be allowed to do so as all the possibilities
+      #   are currently reserved, so we reverse the merge call to enforce the reserved values.
+      opts = opts.merge(reserved)
+      session.railgun.wininet.send(:HttpEndRequestA, request,
+                  opts[:buffers_out],
+                  opts[:flags],
+                  opts[:context]
+      )
+    end
+
+    # ----------------------------------------------------------------- #
+    # ################################################################# #
+    # ----------------------------------------------------------------- #
+    #
+    #                                                    Other Methods
+    #
+    # ----------------------------------------------------------------- #
+    # ################################################################# #
+    # ----------------------------------------------------------------- #
 
 
 		#
@@ -518,7 +710,7 @@ module Browser
 				url = 'http://' + url
 			end
 
-			ret = session.railgun.wininet.send(:InternetOpenUrl, internet, url, headers,
+			ret = session.railgun.wininet.send(:InternetOpenUrlA, internet, url, headers,
 				opts[:headers_length],
 				opts[:flags],
 				opts[:context],
@@ -527,6 +719,41 @@ module Browser
 			# Additional code goes here
 
 		end
+
+    #
+    # Reads data from a handle opened by InternetOpenUrl or HttpOpenRequest
+    # @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385105(v=vs.85).aspx
+    #   InternetReadFileEx
+
+    # @return [Boolean] Returns true if successful otherwise false
+    # @param [Handle] h_file Handle returned by InternetOpenUrl/HttpOpenRequest
+    # @param [Unknown] lp_buffers_out Pointer to an INTERNET_BUFFERS structure
+    #   to receive the data downloaded
+    # @param [Fixnum] dw_flags This parameter can be one of the following values
+    #   IRF_ASYNC - Identical to WININET_API_FLAG_ASYNC
+    #   IRF_SYNC - Identical to WININET_API_FLAG_SYNC
+    #   IRF_USE_CONTEXT - Identical to WININET_API_FLAG_USE_CONTEXT
+    #   IREF_NO_WAIT - Do not wait for data. If no data available, return either
+    #   amount of data requested or amount of data available (whichever smaller)
+    # @param [Fixnum] dw_context A caller supplied context value used for async operations
+    #
+    def _internet_read_file_ex(file, buffers_out, flags, opts = {})
+      defaults = {  # defaults for args in opts hash
+        :context => context_default
+      }
+
+      # Merge in defaults. This approach allows caller to safely pass in a nil
+      opts = defaults.merge(opts)
+
+      # Any arg validation can go here
+
+      ret = session.railgun.wininet.send(:InternetReadFileExA, file, buffers_out, flags,
+        opts[:context],
+      )
+
+      # Additional code goes here
+
+    end
 
 		#
 		# Adds one or more HTTP request headers to the HTTP request handle.
@@ -552,7 +779,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			session.railgun.wininet.send(:HttpAddRequestHeaders,
+			session.railgun.wininet.send(:HttpAddRequestHeadersA,
 									request,
 									headers,
 									opts[:headers_length],
@@ -561,69 +788,54 @@ module Browser
 		end
 
 		#
-		# Ends an HTTP request that was initiated by HttpSendRequestEx.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384230(v=vs.85).aspx
-		#   HttpEndRequest
-		# @return [Boolean] true on success, otherwise false
-		# @param [Handle] request Handle returned by HttpOpenRequest and sent by HttpSendRequestEx
-		# @param [Nil] buffers_out Parameter is reserved and must be NULL
-		# @param [Fixnum] flags Parameter is reserved and must be set to 0
-		# @param [Fixnum] context Parameter is reserved and must be set to 0
-		# @raise [RuntimeError] if Windows returns an error
-		#
-		def _http_end_request(request, opts = {})
-			defaults = {  # defaults for args in opts hash
-				:buffers_out => nil, # reserved
-				:flags       => 0,   # reserved
-				:context     => 0,   # reserved
-			}
-
-			# Normally, we use the following to merge in defaults cuz it allows caller to pass in a nil:
-			#   opts = defaults.merge(opts)
-			#   However, in this case, they shouldn't be allowed to do so as all the possibilities
-			#   are currently reserved, so we reverse the merge call to enforce the reserved values.
-			opts = opts.merge(defaults)
-			session.railgun.wininet.send(:HttpEndRequest, request,
-									opts[:buffers_out],
-									opts[:flags],
-									opts[:context]
-			)
-		end
-
-		#
 		# Retrieves header information associated with an HTTP request.  Header info can be
 		#   strings (default), SYSTEMTIME (for dates), DWORD (for STATUS_CODE, CONTENT_LENGTH,
 		#   and so on, if HTTP_QUERY_FLAG_NUMBER has been used).  To retrieve data as a type other
-		#   than a string, the appropriate modifier w/the attribute passed to dwInfoLevel must be
+		#   than a string, the appropriate modifier w/the attribute passed to InfoLevel must be
 		#   included
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384238(v=vs.85).aspx
 		#  HttpQueryInfo
 		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385351(v=vs.85).aspx
-		#  Query Info Flags
+		#  Query Info Flags for +info_level+
 
 		# @return [Boolean] Returns true if successful, or false otherwise
 		# @param [Handle] request Handle returned by HttpOpenRequest or InternetOpenUrl
 		# @param [Fixnum] info_level Combination of an attribute to be retrieved and flags that
-		#   modify the request
-		# @param [String] buffer Buffer (PBLOB) to receive the requested information
-		# @param [Fixnum] buffer_length The size in bytes of buffer
-		# @param [Fixnum] index Zero-based header index used to enumerate multiple headers w/same name
+		#   modify the request @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385351(v=vs.85).aspx
+		# @param [Fixnum] buffer Pointer to buffer (PDWORD) to receive the requested information
+		# @param [Fixnum] buffer_length Pointer to he size in bytes of buffer
+		# @param [Fixnum] index Pointer to zero-based header index used to enumerate multiple headers w/same name
 		# @raise [RuntimeError] if Windows returns an error (ERROR_INSUFFICIENT_BUFFER)
 		#
-		def _http_query_info(request, buffer, index = 0, info_level = nil, buffer_length = nil)
-			info_level ||= 'HTTP_QUERY_RAW_HEADERS_CRLF' # all headers returned by the server
-			buffer_length ||= buffer.length
-			raise RuntimeError.new "In _http_query_info, buffer parameter cannot be nil per MSDN"
+		def _http_query_info(request, opts = {})
+      defaults = {  # defaults for args in opts hash
+        :info_level     => 'HTTP_QUERY_STATUS_CODE', # just the query status
+        # :info_level     => 'HTTP_QUERY_RAW_HEADERS_CRLF', # all headers returned by the server
+        :buffer         => pointer,
+        :buffer_length  => pointer, # 256 using rsmudge raven ref
+        :index          => nil # null using rsmudge raven ref
+      }
+      opts = defaults.merge(opts)
 
+			# unless buffer
+      #   raise RuntimeError.new "In _http_query_info, buffer parameter cannot be nil per MSDN"
+      # end
 			# Any arg validation can go here
 
-			ret = session.railgun.wininet.send(:HttpQueryInfo, request, info_level, buffer,
-				buffer_length, index
+			ret = session.railgun.wininet.send(:HttpQueryInfoA, request,
+        opts[:info_level],
+        opts[:buffer],
+				opts[:buffer_length],
+        opts[:index]
 			)
 
 			# Additional code goes here
 
 		end
+
+    def http_query_all_headers(request_handle)
+      _http_query_info(request_handle, pointer, pointer, 'HTTP_QUERY_RAW_HEADERS_CRLF', pointer)
+    end
 
 		#
 		# Sends the specified request to the HTTP server.  Recommend against
@@ -655,7 +867,7 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = session.railgun.wininet.send(:HttpSendRequestEx, request, buffers_in, buffers_out,
+			ret = session.railgun.wininet.send(:HttpSendRequestExA, request, buffers_in, buffers_out,
 				opts[:flags],
 				opts[:context],
 			)
@@ -712,13 +924,13 @@ module Browser
 		# @param [Fixnum] :reserved This parameter is reserved and must be 0
 		#
 		def _internet_get_connected_state(flags = pointer , reserved = 0)
-
+      func = :InternetGetConnectedState
 			# Any arg validation can go here
 			# @todo, should flags be set to 8 when x64?  it's a pdword, not dword
-			ret = session.railgun.wininet.send(:InternetGetConnectedState, flags, reserved)
-			handle_railgun_hash(res)
+			ret = session.railgun.wininet.send(func, flags, reserved)
+			handle_railgun_hash(res, func)
 			if res["results"]
-				flags
+				res["flags"]
 			else
 				false
 			end
@@ -753,37 +965,10 @@ module Browser
 
 			# Any arg validation can go here
 
-			ret = session.railgun.wininet.send(:InternetGetConnectedStateEx, opts[:flags], connection_name,
+			ret = session.railgun.wininet.send(:InternetGetConnectedStateExA, opts[:flags], connection_name,
 				name_len,
 				opts[:reserved]
 			)
-
-			# Additional code goes here
-
-		end
-
-		#
-		# Retrieves the last error description or server response on the thread
-    #   calling this function.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa384717(v=vs.85).aspx
-    #   InternetGetLastResponseInfo
-
-		# @return [Boolean] Returns true if error text was successfully written to
-    #   the buffer, otherwise false
-		# @param [Fixnum] :error Pointer to a variable that receives an error
-    #   message pertaining to the operation that failed
-		# @param [String] buffer the error text
-		# @param [Fixnum] buffer_length the size of the error text, in TCHARs
-		#
-		def _internet_get_last_response_info(buffer, buffer_length = -1, error = pointer)
-
-			# Any arg validation can go here
-
-			ret = session.railgun.wininet.send(:InternetGetLastResponseInfo,
-							error,
-							buffer,
-							buffer_length
-							)
 
 			# Additional code goes here
 
@@ -821,115 +1006,6 @@ module Browser
                               number_of_bytes_available,
                               flags,
 				                      context
-			)
-
-			# Additional code goes here
-
-		end
-
-		#
-		# Queries an Internet option on the specified handle.
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385101(v=vs.85).aspx
-    #   InternetQueryOption
-
-		# @return [Boolean] Returns true if successful, or false otherwise
-		# @param [Handle] :internet Handle on which to query information
-		# @param [Fixnum] :option Internet option to be queried
-		# @param [Unknown] :buffer Pointer to a buffer to receive option setting
-		# @param [Fixnum] :buffer_length Pointer to a variable that contains the
-    #   size of lpBuffer, in bytes
-		#
-		# There are quite a few arguments so an opts hash was added.  To clean
-		# up the API, you should review it and adjust as needed.  You may want
-		# to consider regrouping args for: clarity, so args that are usually
-		# left at default values, or are optional, or always a specific value,
-		# etc, are put in the opts hash.  Or, you may want to get rid of the
-		# opts hash entirely.
-		def _internet_query_option(internet, option, buffer = pointer, opts = {})
-			defaults = {  # defaults for args in opts hash
-				:buffer_length => -1 # @todo, is this valid?
-			}
-
-			# Merge in defaults. This approach allows caller to safely pass in a nil
-			opts = defaults.merge(opts)
-
-			# Any arg validation can go here
-
-			ret = session.railgun.wininet.send(:InternetQueryOption, internet, option, buffer,
-				opts[:buffer_length],
-			)
-
-			# Additional code goes here
-
-		end
-
-		#
-		# Reads data from a handle opened by InternetOpenUrl, FtpOpenFile, or
-    #   HttpOpenRequest
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385103(v=vs.85).aspx
-    #   InternetReadFile
-
-		# @return [Boolean] Returns true if successful otherwise false
-		# @param [Handle] :file Handle returned from a previous call to
-    #   InternetOpenUrl, FtpOpenFile, or HttpOpenRequest
-		# @param [Fixnum] :buffer Pointer to a buffer to receive the data (pass pointer size)
-		# @param [Fixnum] :number_of_bytes_to_read Number of bytes to be read
-		# @param [Fixnum] :number_of_bytes_read Pointer to a variable to receive
-    #   the number of bytes read
-		#
-		# There are quite a few arguments so an opts hash was added.  To clean
-		# up the API, you should review it and adjust as needed.  You may want
-		# to consider regrouping args for: clarity, so args that are usually
-		# left at default values, or are optional, or always a specific value,
-		# etc, are put in the opts hash.  Or, you may want to get rid of the
-		# opts hash entirely.
-		def _internet_read_file(file, number_of_bytes_to_read, buffer = pointer, opts = {})
-			defaults = {  # defaults for args in opts hash
-				:number_of_bytes_read => pointer
-			}
-
-			# Merge in defaults. This approach allows caller to safely pass in a nil
-			opts = defaults.merge(opts)
-
-			# Any arg validation can go here
-
-			ret = session.railgun.wininet.send(:InternetReadFile, file, buffer, number_of_bytes_to_read,
-				opts[number_of_bytes_read],
-			)
-
-			# Additional code goes here
-
-		end
-
-		#
-		# Reads data from a handle opened by InternetOpenUrl or HttpOpenRequest
-		# @see http://msdn.microsoft.com/en-us/library/windows/desktop/aa385105(v=vs.85).aspx
-    #   InternetReadFileEx
-
-		# @return [Boolean] Returns true if successful otherwise false
-		# @param [Handle] h_file Handle returned by InternetOpenUrl/HttpOpenRequest
-		# @param [Unknown] lp_buffers_out Pointer to an INTERNET_BUFFERS structure
-    #   to receive the data downloaded
-		# @param [Fixnum] dw_flags This parameter can be one of the following values
-    #   IRF_ASYNC - Identical to WININET_API_FLAG_ASYNC
-    #   IRF_SYNC - Identical to WININET_API_FLAG_SYNC
-    #   IRF_USE_CONTEXT - Identical to WININET_API_FLAG_USE_CONTEXT
-    #   IREF_NO_WAIT - Do not wait for data. If no data available, return either
-    #   amount of data requested or amount of data available (whichever smaller)
-		# @param [Fixnum] dw_context A caller supplied context value used for async operations
-		#
-		def _internet_read_file_ex(file, buffers_out, flags, opts = {})
-			defaults = {  # defaults for args in opts hash
-				:context => context_default
-			}
-
-			# Merge in defaults. This approach allows caller to safely pass in a nil
-			opts = defaults.merge(opts)
-
-			# Any arg validation can go here
-
-			ret = session.railgun.wininet.send(:InternetReadFileEx, file, buffers_out, flags,
-				opts[:context],
 			)
 
 			# Additional code goes here
@@ -1105,10 +1181,11 @@ module Browser
 		# turn a list of args into a good windows-in memory array, null terminated
 		def arrayify(*args)
 			# for now we return nil when args is empty, most win fxns don't want an empty string
-			args.empty? ? nil : args.join("\x00") + "\x00"
+			args.empty? ? nil : args.join("\x00") #+ "\x00"
 		end
 
 	#end # Ie
+
 end # Browser
 end # Windows
 end # Post
