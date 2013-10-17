@@ -11,31 +11,30 @@ url = nil
 source = nil
 additional = 0
 output_type = nil
-if ARGV.length == 1
-	source = ARGV[0]
-elsif ARGV.length == 2 or ARGV.length == 3
-	source = ARGV[0]
-	tmp = ARGV.last.strip
-	if tmp =~ /^(c)|(r)|(railgun)|(rg)|(ruby)$/i
+source = ARGV.delete_at(0)
+if ARGV.length == 1 or ARGV.length == 2
+	tmp = ARGV.pop.strip.downcase
+	if tmp =~ /^(met)|(c)|(r)|(railgun)|(rg)|(ruby)$/
 		# then the last arg looks like an output type
-		output_type = ARGV.pop.strip.downcase
-		if ARGV.length == 2
-			# if we still have 2 args, the we must also have an additional amount
+    puts "Last arg appears to be an output_type"
+		output_type = tmp
+		if ARGV.length == 1
+			# if we still have args, then we must also have an additional amount
 			addl = ARGV.pop.strip
-			additional = addl =~ /^\s*all\s*$/i ? -1 : addl.to_i
+			additional = addl =~ /^all$/i ? -1 : addl.to_i
 		end
 	else
 		# assume the last item is the additional amount
-		addl = ARGV.pop.strip
-		additional = addl =~ /^\s*all\s*$/i ? -1 : addl.to_i
-		# if we still have 2 args, then we must also have an output type
-		output_type = ARGV.pop.strip.downcase if ARGV.length == 2
+    puts "Last arg appears to be an additional amount"
+		additional = tmp =~ /^all$/i ? -1 : tmp.to_i
+		# if we still have args, then we must also have an output type
+		output_type = ARGV.pop.strip.downcase if ARGV.length == 1
 	end
 	# adjust additional to get desired result later
-	additional -= 1 if additional >= 1 and not additional == -1
+	additional -= 1 if additional >= 1
 else
 	# "InternetOpen" => "http://msdn.microsoft.com/en-us/library/windows/desktop/aa385096%28v=vs.85%29.aspx"
-	puts "Usage: #{$0} source [num_additional|all] [C|railgun|ruby|r]"
+	puts "Usage: #{$0} source [num_additional|all] [C|met|railgun|ruby|r]"
 	puts
 	puts "source should be a url or a local html file containing msdn documentation for the method to be parsed"
 	puts "optionally, provide the number of additional functions to parse (default's to 0) or 'all' for entire dll"
@@ -43,6 +42,7 @@ else
 	exit 1
 end
 
+puts "Args are output_type:#{output_type}, addl:#{additional}, source:#{source}"
 
 class MsdnMethod
 	# necessary if we ever pull this class def out of this file
@@ -52,7 +52,8 @@ class MsdnMethod
 	include Comparable
 
 	attr_reader :source, :description, :nokodoc, :dll_name, :yard_factory, :param_infos, :return_desc, :reqs
-	attr_reader :c_args, :c_ret_type, :c_name, :c_lines, :c_code # c_args are really railgun args ATM.
+  attr_reader :unicode_and_ansi
+	attr_reader :c_met_ext, :c_ret_type, :c_name, :c_lines, :c_code, :c_args # c_args are really railgun args ATM.
 	attr_reader :ruby_args, :ruby_ret_type, :ruby_name, :ruby_code, :ruby_yard_tags
 	attr_reader :railgun_args, :railgun_ret_type, :railgun_name, :railgun_code
 
@@ -66,6 +67,7 @@ class MsdnMethod
 	CODE_SNIP_CONTAINER_TAB_SINGLE_XPATH = "//div[@class='codeSnippetContainerTabSingle']" # e.g. text=C++
 	CODE_SNIP_CONTAINER_CODE_XPATH = "//div[@class='codeSnippetContainerCode']" # the code itself
 	MAIN_SECTION_XPATH = "//div[@id='mainSection']" # all the info after the code snippet
+
 
 	C_STRUCTS_TO_RAILGUN = {
 		'ret' => {
@@ -155,6 +157,8 @@ class MsdnMethod
 		s.gsub!(/\P{ASCII}/, ' ') # nuke all non-ascii chars for now (esp 0xA0 and 0xC2 etc)
 		s.squeeze!(" ")
 		s.strip!
+    #puts "Returning #{s}"
+    s
 	end
 
 	def self.commentify(str)
@@ -189,6 +193,7 @@ class MsdnMethod
 		@nokodoc = Nokogiri::HTML(open(page))
 		inform "Done."
 		@source = page
+    @unicode_and_ansi = false
 		@yard_factory = YardTagFactory.new
 	end
 
@@ -210,6 +215,7 @@ class MsdnMethod
 		# we call these c_args below, but they've really already been converted to railgun-like args
 		@c_name, @c_ret_type, @c_args, @c_lines = analyze_cpp_code(@c_code)
 		#puts "Got #{@c_name}, #{@c_ret_type}, #{@c_args.inspect}", #{@c_lines}""
+
 		@railgun_name = @c_name # identical
 		#puts "Converting c method name to ruby method name"
 		@ruby_name = rubify_name(@c_name)
@@ -235,6 +241,32 @@ class MsdnMethod
 		@ruby_code = rubify_code(@c_name, @ruby_name, @ruby_args, ret_type_is_bool)
 		# YARD
 		@ruby_yard_tags = yard_factory.garden(self)
+
+    # convert C syntax to meterpreter extension formatted code like this:
+    # // Minimum supported client:Windows 2000 Professional
+    # // Minimum supported server:Windows 2000 Server
+    # typedef HINTERNET (WINAPI * PINTERNETOPENA)( LPCSTR lpszAgent, DWORD dwAccessType,
+    #                     LPCSTR lpszProxyName, LPCSTR lpszProxyBypass, DWORD dwFlags );
+    @c_met_ext = ''
+    self.reqs.each {|k,v| @c_met_ext += "// #{k}:#{v}\n"}
+    @c_met_ext += "// #{self.source}\n"
+    @c_met_ext += "typedef #{self.c_ret_type} (WINAPI * P#{self.c_name.upcase}"
+    @c_met_ext += "A" if self.unicode_and_ansi
+    @c_met_ext += ")(\n"
+    clean_lines = self.c_lines.map do |line|
+      a = line.split(" ")
+      # modify STR args if func is unicode_and_ansi
+      if self.unicode_and_ansi
+        if a[1] =~ /STR$/ # drop any T's outside of STR
+          parts = a[1].split(/STR$/)
+          a[1] = parts[0].sub("T",'') + "STR"
+        end
+        # any other unicode or tchar to ansi conversions necessary?
+      end
+      "\t" + a[1..2].join(" ")
+    end
+    @c_met_ext += clean_lines.join(",\n")
+    @c_met_ext += "\n);"
 		true
 	end
 
@@ -592,6 +624,8 @@ private :run_dll_function
 			when "Requirements"
 				# gets [[type, value],]
 				@reqs = parse_reqs_ns(ns.at(idx+2))
+        #puts "reqs nodes are #{@reqs}"
+        @unicode_and_ansi = true if @reqs.keys.include?("Unicode and ANSI names")
 				break # no reason to keep parsing
 			end
 		end
@@ -643,8 +677,8 @@ private :run_dll_function
 				end
 			end
 		end
-		#keys.each_with_index {|key,idx| puts("#{key}:#{values[idx]}")}
-		keys.zip(values)
+		#keys.each_with_index {|key,idx| puts "key:#{key},value:#{values[idx]}" }
+		Hash[keys.zip(values)]
 	end
 
 end # MsdnMethod
@@ -848,8 +882,10 @@ unless additional == 0
 end
 
 # prep to display w/code grouped together by type/lang
-c_disp, rg_disp, ruby_disp, yard_disp = [],[],[],[]
+met_disp, c_disp, rg_disp, ruby_disp, yard_disp = [],[],[],[],[]
 msdn_methods.each do |m|
+ #puts "Adding #{m.c_met_ext}\n"
+  met_disp << m.c_met_ext
 	c_disp << m.c_code
 	rg_disp << m.railgun_code
 	total_ruby_disp = "#\n"
@@ -869,6 +905,12 @@ inform
 inform "Results:"
 inform
 puts
+if output_type == "met"
+  inform "C code for a meterpreter extension:"
+  inform "--------------------------------------------------------------------- [*]"
+  met_disp.each {|str_block| puts str_block;puts} # str_block is a block of code string
+  puts
+end
 if output_type == "c"
 	inform "C/C++ Code:"
 	inform "--------------------------------------------------------------------- [*]"
