@@ -16,7 +16,7 @@ if ARGV.length == 1 or ARGV.length == 2
 	tmp = ARGV.pop.strip.downcase
 	if tmp =~ /^(met)|(c)|(r)|(railgun)|(rg)|(ruby)$/
 		# then the last arg looks like an output type
-    puts "Last arg appears to be an output_type"
+    #puts "Last arg appears to be an output_type"
 		output_type = tmp
 		if ARGV.length == 1
 			# if we still have args, then we must also have an additional amount
@@ -25,7 +25,7 @@ if ARGV.length == 1 or ARGV.length == 2
 		end
 	else
 		# assume the last item is the additional amount
-    puts "Last arg appears to be an additional amount"
+    #puts "Last arg appears to be an additional amount"
 		additional = tmp =~ /^all$/i ? -1 : tmp.to_i
 		# if we still have args, then we must also have an output type
 		output_type = ARGV.pop.strip.downcase if ARGV.length == 1
@@ -42,7 +42,7 @@ else
 	exit 1
 end
 
-puts "Args are output_type:#{output_type}, addl:#{additional}, source:#{source}"
+#puts "Args are output_type:#{output_type}, addl:#{additional}, source:#{source}"
 
 class MsdnMethod
 	# necessary if we ever pull this class def out of this file
