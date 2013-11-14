@@ -247,12 +247,14 @@ class MsdnMethod
     # // Minimum supported server:Windows 2000 Server
     # typedef HINTERNET (WINAPI * PINTERNETOPENA)( LPCSTR lpszAgent, DWORD dwAccessType,
     #                     LPCSTR lpszProxyName, LPCSTR lpszProxyBypass, DWORD dwFlags );
-    @c_met_ext = ''
-    self.reqs.each {|k,v| @c_met_ext += "// #{k}:#{v}\n"}
-    @c_met_ext += "// #{self.source}\n"
-    @c_met_ext += "typedef #{self.c_ret_type} (WINAPI * P#{self.c_name.upcase}"
-    @c_met_ext += "A" if self.unicode_and_ansi
-    @c_met_ext += ")(\n"
+    @c_met_ext = "/*!\n" # start a C comment block
+    self.reqs.each {|k,v| @c_met_ext << " * #{k}:#{v}\n"}
+    @c_met_ext << " * #{self.source}\n"
+    @c_met_ext << " * @brief Typedef for the #{self.c_name} function. \n"
+    @c_met_ext << " */\n" # close out the C comment block
+    @c_met_ext << "typedef #{self.c_ret_type} (WINAPI * P#{self.c_name.upcase}"
+    @c_met_ext << "A" if self.unicode_and_ansi
+    @c_met_ext << ")(\n"
     clean_lines = self.c_lines.map do |line|
       a = line.split(" ")
       # modify STR args if func is unicode_and_ansi
@@ -265,8 +267,8 @@ class MsdnMethod
       end
       "\t" + a[1..2].join(" ")
     end
-    @c_met_ext += clean_lines.join(",\n")
-    @c_met_ext += "\n);"
+    @c_met_ext << clean_lines.join(",\n")
+    @c_met_ext << "\n);"
 		true
 	end
 
@@ -781,9 +783,6 @@ class YardTagFactory
 	end
 
 	def garden(src) # (rg_code = @yard)
-		#
-		# @TODO:  Need Description down here
-		#
 		#inform "Gardening a:#{src.class.to_s}"
 		desc = default_description
 		if src.class == MsdnMethod
@@ -884,51 +883,44 @@ end
 # prep to display w/code grouped together by type/lang
 met_disp, c_disp, rg_disp, ruby_disp, yard_disp = [],[],[],[],[]
 msdn_methods.each do |m|
- #puts "Adding #{m.c_met_ext}\n"
+  # add comments in like /*! @brief Typedef for the BlahA function. */
   met_disp << m.c_met_ext
-	c_disp << m.c_code
-	rg_disp << m.railgun_code
-	total_ruby_disp = "#\n"
-	# sometimes the description comes back w/embedded newlines so we need to add the leading # to all
-	if m.description and not m.description.empty?
-		total_ruby_disp += MsdnMethod.commentify(m.description)
-	else
-		total_ruby_disp += MsdnMethod.commentify "No description found"
-	end
-	total_ruby_disp += MsdnMethod.commentify "@see #{m.source} #{m.c_name}" if m.c_name # don't think this would ever not be
-	total_ruby_disp += "#{m.ruby_yard_tags_comment_block}\n#\n#{m.ruby_code}" if (m.ruby_yard_tags_comment_block and m.ruby_code)
-	ruby_disp << total_ruby_disp
+  c_disp << m.c_code
+  rg_disp << m.railgun_code
+  total_ruby_disp = "#\n"
+  # sometimes the description comes back w/embedded newlines so we need to add the leading # to all
+  if m.description and not m.description.empty?
+  	total_ruby_disp += MsdnMethod.commentify(m.description)
+  else
+  	total_ruby_disp += MsdnMethod.commentify "No description found"
+  end
+  total_ruby_disp += MsdnMethod.commentify "@see #{m.source} #{m.c_name}" if m.c_name # don't think this would ever not be
+  total_ruby_disp += "#{m.ruby_yard_tags_comment_block}\n#\n#{m.ruby_code}" if (m.ruby_yard_tags_comment_block and m.ruby_code)
+  ruby_disp << total_ruby_disp
 end
 # Final display
-puts
 inform
 inform "Results:"
 inform
-puts
 if output_type == "met"
   inform "C code for a meterpreter extension:"
   inform "--------------------------------------------------------------------- [*]"
   met_disp.each {|str_block| puts str_block;puts} # str_block is a block of code string
-  puts
 end
 if output_type == "c"
 	inform "C/C++ Code:"
 	inform "--------------------------------------------------------------------- [*]"
 	c_disp.each {|str_block| puts str_block;puts} # str_block is a block of code string
-	puts
 end
 if output_type == "rg" or output_type == "railgun" or output_type == "r"
 	inform "Railgun Code:"
 	inform "--------------------------------------------------------------------- [*]"
 	rg_disp.each {|str_block| puts str_block;puts}
-	puts
 end
 if output_type == "ruby" or output_type == "r"
 	inform "Ruby Code:"
 	inform "--------------------------------------------------------------------- [*]"
 	ruby_disp.each {|str_block| puts str_block;puts}
-	puts
 	puts orig_msdn_method.get_dll_dry_helper_function # this could be msdn_methods.first.get_blah too
 end
-puts
 inform "********** All parsing complete.  Parsed #{msdn_methods.length} functions."
