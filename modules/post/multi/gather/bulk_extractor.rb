@@ -45,10 +45,11 @@ class Metasploit3 < Msf::Post
 	end
 
 	def run
-		# TODO: check root at some point? is_root?
+		# @TODO: check root at some point
 		REGEX_IP=%q{'\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)'}
 		REGEX_PASS=%q{'[Pp][Aa][Ss][Ss]'}
 		REGEX_EMAIL=%q{'\w+([._-]\w)*@\w+([._-]\w)*\.\w{2,4}'}
+		# @TODO: read extra regexes from optional file on disk, yaml maybe?
 		expressions=[]
 		expressions << $REGEX_IP if datastore['SEARCH_IPS']
 		expressions << $REGEX_PASS if datastore['SEARCH_PASS']
