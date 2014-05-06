@@ -89,6 +89,10 @@ module Scriptable
           # merge in any opts that were passed in, defaulting to the
           # copy of the datastore (of the exploit) that spawned the session
           local_exploit_opts = copy_of_orig_exploit_datastore.merge(opts)
+          local_exploit_opts.each_pair {|k,v| mod.datastore[k]=v }
+          # for debugging
+          pp local_exploit_opts
+          pp mod.datastore
 
           # try to run this local exploit, which is likely to be exception prone
           begin
