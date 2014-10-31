@@ -44,12 +44,17 @@ module Banner
     # Easter egg (always a cow themed logo): export/set GOCOW=1
     if ENV['GOCOW']
       logos.concat(Dir.glob(::Msf::Config.logos_directory + File::SEPARATOR + 'cow*.txt'))
-    # Easter egg (always a halloween themed logo): export/set THISISHALLOWEEN=1
-    elsif ( ENV['THISISHALLOWEEN'] || Time.now.strftime("%m%d") == "1031" )
-      logos.concat(Dir.glob(::Msf::Config.logos_directory + File::SEPARATOR + '*.hwtxt'))
     else
-      logos.concat(Dir.glob(::Msf::Config.logos_directory + File::SEPARATOR + '*.txt'))
-      logos.concat(Dir.glob(::Msf::Config.user_logos_directory + File::SEPARATOR + '*.txt'))
+      month_day = Time.now.strftime("%m%d")
+      # allow month+day specific logos in global and user-specific logos directories
+      month_day_logos = Dir.glob(File.join(::Msf::Config.logos_directory, month_day, '*.txt')) +
+        Dir.glob(File.join(::Msf::Config.user_logos_directory, month_day, '*.txt'))
+      if month_day_logos.empty?
+        logos.concat(Dir.glob(File.join(::Msf::Config.logos_directory, '*.txt')))
+        logos.concat(Dir.glob(File.join(::Msf::Config.user_logos_directory, '*.txt')))
+      else
+        logos.concat(month_day_logos)
+      end
     end
 
     logos = logos.map { |f| File.absolute_path(f) }
