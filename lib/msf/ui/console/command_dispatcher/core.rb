@@ -2095,82 +2095,99 @@ class Core
 
     args << "all" if (args.length == 0)
 
-    args.each { |type|
+    args.each do |type|
       case type
-        when '-h'
-          cmd_show_help
-        when 'all'
-          show_encoders
-          show_nops
-          show_exploits
-          show_payloads
-          show_auxiliary
-          show_post
-          show_plugins
-        when 'encoders'
-          show_encoders
-        when 'nops'
-          show_nops
-        when 'exploits'
-          show_exploits
-        when 'payloads'
-          show_payloads
-        when 'auxiliary'
-          show_auxiliary
-        when 'post'
-          show_post
-        when 'options'
-          if (mod)
-            show_options(mod)
-          else
-            show_global_options
-          end
-        when 'missing'
-          if (mod)
-            show_missing(mod)
-          else
-            print_error("No module selected.")
-          end
-        when 'advanced'
-          if (mod)
-            show_advanced_options(mod)
-          else
-            print_error("No module selected.")
-          end
-        when 'evasion'
-          if (mod)
-            show_evasion_options(mod)
-          else
-            print_error("No module selected.")
-          end
-        when 'sessions'
-          if (active_module and active_module.respond_to?(:compatible_sessions))
-            sessions = active_module.compatible_sessions
-          else
-            sessions = framework.sessions.keys.sort
-          end
-          print_line
-          print(Serializer::ReadableText.dump_sessions(framework, :session_ids => sessions))
-          print_line
-        when "plugins"
-          show_plugins
-        when "targets"
-          if (mod and mod.exploit?)
-            show_targets(mod)
-          else
-            print_error("No exploit module selected.")
-          end
-        when "actions"
-          if mod && mod.kind_of?(Msf::Module::HasActions)
-            show_actions(mod)
-          else
-            print_error("No module with actions selected.")
-          end
-
+      when '-h'
+        return cmd_show_help
+      when 'all'
+        show_encoders
+        show_nops
+        show_exploits
+        show_payloads
+        show_auxiliary
+        show_post
+        show_plugins
+      when 'encoders'
+        show_encoders
+      when 'nops'
+        show_nops
+      when 'exploits'
+        show_exploits
+      when 'payloads'
+        show_payloads
+      when 'auxiliary'
+        show_auxiliary
+      when 'post'
+        show_post
+      when 'options'
+        mod ? show_options(mod) : show_global_options
+      when 'missing'
+        mod ? show_missing(mod) : print_error("No module selected.")
+      when 'advanced'
+        mod ? show_advanced_options(mod) : print_error("No module selected.")
+      when 'evasion'
+        mod ? show_evasion_options(mod) : print_error("No module selected.")
+      when 'sessions'
+        if active_module && active_module.respond_to?(:compatible_sessions)
+          sessions = active_module.compatible_sessions
         else
-          print_error("Invalid parameter \"#{type}\", use \"show -h\" for more information")
+          sessions = framework.sessions.keys.sort
+        end
+        print_line
+        print(Serializer::ReadableText.dump_sessions(framework, :session_ids => sessions))
+        print_line
+      when "plugins"
+        show_plugins
+      when "targets"
+        if mod && mod.exploit?
+          show_targets(mod)
+        else
+          print_error("No exploit module selected.")
+        end
+      when "actions"
+        if mod && mod.kind_of?(Msf::Module::HasActions)
+          show_actions(mod)
+        else
+          print_error("No module with actions selected.")
+        end
+      when 'logs'
+        sinks = $dispatcher.log_sinks
+        unless sinks.empty?
+          print_status("There are #{sinks.length} log sinks, the following " +
+            "output to a file")
+        end
+        sinks.each do |sink_name, sink_object|
+          # only print if it can tell us it's path
+          if sink_object.respond_to?(:path)
+            print_status("  #{sink_name}:#{sink_object.path}")
+          end
+        end
+      when 'log'
+        num_lines = 50
+        log_type = 'core' # core, rex, base etc
+        # we may have additional args
+        #next_arg = args.pop
+        sink = $dispatcher.log_sinks[log_type]
+        if sink && sink.respond_to?(:path)
+          log_file = sink.path
+        else
+          print_error "Could not locate a log file connected to #{log_type}"
+          return false
+        end
+        if log_file && File.readable?(log_file)
+          print_status "Showing last #{num_lines} lines of #{log_file}"
+          lines = File.readlines(log_file)
+          start_line = lines.length - num_lines
+          start_line = 0 if start_line < 0
+          # use print_good here so users don't confuse log with real error msgs
+          lines[start_line..-1].each {|line| print_good(line.strip)}
+        else
+          print_error("Could not open the log file:#{log_file}, check permissions")
+        end
+      else
+        print_error("Invalid parameter \"#{type}\", use \"show -h\" for more information")
       end
-    }
+    end
   end
 
   #
@@ -2183,10 +2200,10 @@ class Core
   def cmd_show_tabs(str, words)
     return [] if words.length > 1
 
-    res = %w{all encoders nops exploits payloads auxiliary post plugins options}
+    res = %w{all encoders nops exploits payloads auxiliary post plugins options log}
     if (active_module)
       res.concat(%w{ missing advanced evasion targets actions })
-      if (active_module.respond_to? :compatible_sessions)
+      if active_module.respond_to?(:compatible_sessions)
         res << "sessions"
       end
     end

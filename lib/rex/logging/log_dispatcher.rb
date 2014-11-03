@@ -37,7 +37,7 @@ class LogDispatcher
   end
 
   #
-  # Calls the source association routie.
+  # Calls the source association routine.
   #
   def []=(src, sink)
     store(src, sink)

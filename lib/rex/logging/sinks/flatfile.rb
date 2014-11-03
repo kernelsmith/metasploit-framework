@@ -25,6 +25,10 @@ class Flatfile
     fd.close
   end
 
+  def path
+    fd.path
+  end
+
   def log(sev, src, level, msg, from) # :nodoc:
     if (sev == LOG_RAW)
       fd.write(msg)
