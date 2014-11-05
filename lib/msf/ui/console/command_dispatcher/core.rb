@@ -1993,6 +1993,8 @@ class Core
     res += %w{
       ConsoleLogging
       LogLevel
+      LogShowLines
+      LogShowType
       MinimumRank
       SessionLogging
       TimestampOutput
@@ -2095,7 +2097,7 @@ class Core
 
     args << "all" if (args.length == 0)
 
-    args.each do |type|
+    args.each_with_index do |type, idx|
       case type
       when '-h'
         return cmd_show_help
@@ -2154,7 +2156,7 @@ class Core
         sinks = $dispatcher.log_sinks
         unless sinks.empty?
           print_status("There are #{sinks.length} log sinks, the following " +
-            "output to a file")
+            "log types output to the file indicated:")
         end
         sinks.each do |sink_name, sink_object|
           # only print if it can tell us it's path
@@ -2163,10 +2165,11 @@ class Core
           end
         end
       when 'log'
-        num_lines = 50
-        log_type = 'core' # core, rex, base etc
-        # we may have additional args
-        #next_arg = args.pop
+        datastore = active_module ? active_module.datastore : self.framework.datastore
+        # using the datastore isn't as handy as e.g. show log 40 core but that
+        # would require revamping cmd_show's argument parsing
+        num_lines = datastore['LogShowLines'] || '50'
+        log_type = datastore['LogShowType'] || 'core' # core, rex, base etc
         sink = $dispatcher.log_sinks[log_type]
         if sink && sink.respond_to?(:path)
           log_file = sink.path
@@ -2176,8 +2179,9 @@ class Core
         end
         if log_file && File.readable?(log_file)
           print_status "Showing last #{num_lines} lines of #{log_file}"
+          # @TODO:  A better solution here would be to use the Elif gem
           lines = File.readlines(log_file)
-          start_line = lines.length - num_lines
+          start_line = lines.length - num_lines.to_i
           start_line = 0 if start_line < 0
           # use print_good here so users don't confuse log with real error msgs
           lines[start_line..-1].each {|line| print_good(line.strip)}
@@ -3226,6 +3230,8 @@ class Core
       [ 'Prompt', framework.datastore['Prompt'] || Msf::Ui::Console::Driver::DefaultPrompt.to_s.gsub(/%.../,"") , "The prompt string" ],
       [ 'PromptChar', framework.datastore['PromptChar'] || Msf::Ui::Console::Driver::DefaultPromptChar.to_s.gsub(/%.../,""), "The prompt character" ],
       [ 'PromptTimeFormat', framework.datastore['PromptTimeFormat'] || Time::DATE_FORMATS[:db].to_s, 'Format for timestamp escapes in prompts' ],
+      [ 'LogShowLines', framework.datastore['LogShowLines'] || '50', 'Number of lines to show from end of log file'],
+      [ 'LogShowType', framework.datastore['LogShowType'] || 'core', 'Type of log to show (log sink type: rex, core, base etc)']
     ].each { |r| tbl << r }
 
     print(tbl.to_s)
