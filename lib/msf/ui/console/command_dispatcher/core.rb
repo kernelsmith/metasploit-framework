@@ -2204,7 +2204,7 @@ class Core
   def cmd_show_tabs(str, words)
     return [] if words.length > 1
 
-    res = %w{all encoders nops exploits payloads auxiliary post plugins options log}
+    res = %w{all encoders nops exploits payloads auxiliary post plugins options log logs}
     if (active_module)
       res.concat(%w{ missing advanced evasion targets actions })
       if active_module.respond_to?(:compatible_sessions)
