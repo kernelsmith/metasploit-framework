@@ -1,5 +1,5 @@
 #rip_msdn_to_railgun
-# e.g. http://msdn.microsoft.com/en-us/library/windows/desktop/aa385125(v=vs.85).aspx
+# e.g. https://msdn.microsoft.com/en-us/library/windows/desktop/aa385125(v=vs.85).aspx
 
 require 'nokogiri'
 require 'open-uri'
