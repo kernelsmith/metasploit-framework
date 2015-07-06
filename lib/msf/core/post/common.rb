@@ -216,5 +216,21 @@ module Msf::Post::Common
     nil
   end
 
+  #
+  # Cross-platform way of finding an executable in $PATH, props to mislav
+  #
+  def which(cmd)
+    # we don't use a ternary here to avoid an extra call over the wire
+    envs = get_envs('PATHTEXT', 'PATH')
+    exts = envs['PATHEXT'] ? envs['PATHEXT'].split(';') : ['']
+    envs['PATH'].split(session.fs.file.separator).each do |path|
+      exts.each do |ext|
+        exe = File.join(path, "#{cmd}#{ext}")
+        return exe if File.executable? exe
+      end
+    end
+    nil
+  end
+
 end
 
