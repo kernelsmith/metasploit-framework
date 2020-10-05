@@ -3,9 +3,10 @@
 
 Vagrant.configure(2) do |config|
   config.ssh.forward_x11 = true
-  config.vm.box = "ubuntu/bionic64"
+  # Canonical doesn't provide an official Vagrant box for vmware, so use the hashicorp box
+  config.vm.box = "hashicorp/bionic64" # https://app.vagrantup.com/hashicorp/boxes/bionic64
   config.vm.network :forwarded_port, guest: 4444, host: 4444
-  config.vm.provider "vmware" do |v|
+  config.vm.provider "vmware_desktop" do |v|
 	  v.memory = 2048
 	  v.cpus = 2
   end
